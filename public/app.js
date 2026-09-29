@@ -58,8 +58,11 @@ function getAccount() { return list(state.data?.accounts).find((account) => acco
 function getMeeting() { return list(state.data?.meetings).find((meeting) => meeting.id === state.meetingId); }
 function accountForMeeting(meeting) {
   if (!meeting) return null;
+  const accounts = list(state.data?.accounts);
+  if (meeting.accountId) return accounts.find((account) => account.id === meeting.accountId) || null;
   const hint = String(meeting.accountHint || "").toLowerCase();
-  return list(state.data?.accounts).find((account) => account.id === meeting.accountId || account.id === meeting.accountHint || (hint && (String(account.name).toLowerCase() === hint || hint.includes(String(account.name).toLowerCase()))));
+  const matching = accounts.filter((account) => account.id === meeting.accountHint || (hint && String(account.name).toLowerCase() === hint));
+  return matching.length === 1 ? matching[0] : null;
 }
 
 function renderAccounts() {
@@ -74,7 +77,7 @@ function renderAccounts() {
       state.accountId = account.id;
       state.dealId = null;
       const matchingMeeting = list(state.data?.meetings).find((meeting) => accountForMeeting(meeting)?.id === account.id);
-      if (matchingMeeting) state.meetingId = matchingMeeting.id;
+      state.meetingId = matchingMeeting?.id || null;
       renderWorkspace();
     });
     return button;
@@ -118,14 +121,15 @@ function renderDeals() {
 }
 
 function renderMeetings() {
-  const meetings = list(state.data?.meetings);
+  const meetings = list(state.data?.meetings).filter((meeting) => accountForMeeting(meeting)?.id === state.accountId);
+  if (!meetings.some((meeting) => meeting.id === state.meetingId)) state.meetingId = meetings[0]?.id || null;
   const select = $("meeting-select");
   select.replaceChildren(...meetings.map((meeting) => { const option = element("option", "", meeting.title || "Untitled meeting"); option.value = meeting.id; return option; }));
-  if (!meetings.length) { const option = element("option", "", "No meetings available"); select.append(option); }
+  if (!meetings.length) { const option = element("option", "", "No meetings for this account"); option.value = ""; select.append(option); }
   select.value = state.meetingId || "";
   select.disabled = !meetings.length || state.busy;
   const meeting = getMeeting();
-  $("meeting-note").textContent = meeting?.note || "No meeting notes are available. Reset the synthetic data to restore the sample workspace.";
+  $("meeting-note").textContent = meeting?.note || "No meeting notes are available for this account. Select an account with a meeting to run follow-through.";
   $("meeting-meta").replaceChildren(...(meeting ? [element("span", "", date(meeting.occurredAt, true)), element("span", "", "·"), element("span", "", meeting.accountHint || getAccount()?.name || "Synthetic meeting")] : []));
 }
 
@@ -162,7 +166,7 @@ function renderControls() {
   $("budget-value").textContent = state.mode === "offline" ? "0 live model calls" : budgetLabel(config);
   $("live-readiness").textContent = config.liveReady ? `Live configuration is ready. Configured model: ${config.model || "unspecified"}. Real-model mode uses the configured gateway.` : "Real-model mode is unavailable until the local server has verified live configuration.";
   $("mode-explanation").textContent = state.mode === "offline" ? "Offline mode exercises the tool workflow using fixture responses. It does not prove live model behavior." : "Real-model mode makes bounded inference requests. Tools update only this synthetic local CRM; every call is journaled.";
-  $("run-button").disabled = !state.data || !state.meetingId || state.busy || (state.mode === "live" && !config.liveReady);
+  $("run-button").disabled = !state.data || !state.meetingId || accountForMeeting(getMeeting())?.id !== state.accountId || state.busy || (state.mode === "live" && !config.liveReady);
   $("run-button-label").textContent = state.busy ? "Follow-through is running…" : state.mode === "live" ? "Run with real model" : "Run fixture follow-through";
   $("reset-button").disabled = state.busy || !state.data;
   $("meeting-select").disabled = state.busy || !list(state.data?.meetings).length;
@@ -350,7 +354,7 @@ $("meeting-select").addEventListener("change", (event) => {
 document.querySelectorAll('input[name="mode"]').forEach((input) => input.addEventListener("change", () => { state.mode = input.value; renderControls(); }));
 
 $("run-button").addEventListener("click", async () => {
-  if (state.busy || !state.meetingId) return;
+  if (state.busy || !state.meetingId || accountForMeeting(getMeeting())?.id !== state.accountId) return;
   state.loadingRunId = "starting";
   state.run = null;
   setError("run-error", null);

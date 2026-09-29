@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { openStore } from './store.mjs';
+import { openStore, StoreError } from './store.mjs';
 import { readConfig, publicConfig } from './config.mjs';
 import { runMeeting } from './runner.mjs';
 
@@ -18,6 +18,13 @@ const staticFiles = new Map([
 function json(res, code, data) {
   res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
   res.end(JSON.stringify(data));
+}
+function errorStatus(error) {
+  if (error instanceof StoreError) {
+    if (error.code === 'NOT_FOUND') return 404;
+    if (['RUN_ACTIVE', 'VERSION_CONFLICT'].includes(error.code)) return 409;
+  }
+  return 400;
 }
 async function readBody(req) {
   let body = '';
@@ -57,14 +64,15 @@ const server = http.createServer(async (req, res) => {
       if (activeRun) return json(res, 409, { error: 'A run is already active.' });
       if (!['offline', 'live'].includes(mode)) return json(res, 400, { error: 'Invalid mode.' });
       if (mode === 'live' && !config.liveReady) return json(res, 400, { error: 'Live inference is not configured/enabled.' });
-      if (typeof meetingId !== 'string' || !store.getMeeting(meetingId)) return json(res, 404, { error: 'Meeting not found.' });
+      if (typeof meetingId !== 'string') return json(res, 400, { error: 'meetingId must be a string.' });
+      store.getMeeting(meetingId);
       const promise = runMeeting({ store, meetingId, mode, config, onRunCreated: run => { activeRun = run.id; json(res, 202, { id: run.id }); } });
-      promise.catch(() => { if (!res.headersSent) json(res, 500, { error: 'Run could not start.' }); }).finally(() => { activeRun = null; });
+      promise.catch(error => { if (!res.headersSent) json(res, errorStatus(error), { error: error.message }); }).finally(() => { activeRun = null; });
       return;
     }
     return json(res, 404, { error: 'Not found.' });
   } catch (error) {
-    if (!res.headersSent) json(res, 400, { error: error.message });
+    if (!res.headersSent) json(res, errorStatus(error), { error: error.message });
     else res.end();
   }
 });
