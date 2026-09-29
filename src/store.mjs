@@ -279,7 +279,11 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
       });
     },
     getRun,
-    listRuns() { return db.prepare('SELECT id,meeting_id,mode,status,started_at,finished_at,summary,error_json FROM runs ORDER BY rowid DESC LIMIT 100').all().map((row) => ({ id: row.id, meetingId: row.meeting_id, mode: row.mode, status: row.status, startedAt: row.started_at, finishedAt: row.finished_at, summary: row.summary, error: row.error_json ? JSON.parse(row.error_json) : null })); },
+    listRuns({ limit = 100, offset = 0 } = {}) {
+      integer(limit, 'run limit', 1, 101);
+      integer(offset, 'run offset', 0, Number.MAX_SAFE_INTEGER);
+      return db.prepare('SELECT id,meeting_id,mode,status,started_at,finished_at,summary,error_json FROM runs ORDER BY rowid DESC LIMIT ? OFFSET ?').all(limit, offset).map((row) => ({ id: row.id, meetingId: row.meeting_id, mode: row.mode, status: row.status, startedAt: row.started_at, finishedAt: row.finished_at, summary: row.summary, error: row.error_json ? JSON.parse(row.error_json) : null }));
+    },
     executeTool(name, args, context = {}) {
       if (!Object.hasOwn(handlers, name)) fail('UNKNOWN_TOOL', 'The requested database tool does not exist.');
       object(context, ['runId'], [], 'tool context');

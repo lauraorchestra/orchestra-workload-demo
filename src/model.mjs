@@ -34,16 +34,19 @@ export function createModel({ config, mode, fetch: fixtureFetch, onEvent }) {
       traceparent: `00-${traceId}-${randomBytes(8).toString('hex')}-01`,
     } : {}) };
     const model = mode === 'offline' ? 'fixture-model' : config.model;
-    onEvent({ type: 'llm_request', stage, data: { callIndex, model, mode, traceId: gateway ? traceId : null, workload: gateway?.workloads[stage] || null, messageCount: messages.length } });
+    // Snapshot the JSON body before the agent appends more messages to its conversation.
+    const request = JSON.parse(JSON.stringify({
+      model, messages, max_tokens: config.maxOutputTokens, temperature: 0,
+      ...(json ? { response_format: { type: 'json_object' } } : {}),
+      ...(tools ? { tools, parallel_tool_calls: false } : {}),
+    }));
+    onEvent({ type: 'llm_request', stage, data: { callIndex, model, mode, provider: config.provider, traceId: gateway ? traceId : null, workload: gateway?.workloads[stage] || null, messageCount: request.messages.length, request: JSON.parse(JSON.stringify(request)) } });
+    const startedAt = performance.now();
     try {
-      const { data, response } = await client.chat.completions.create({
-        model, messages, max_tokens: config.maxOutputTokens, temperature: 0,
-        ...(json ? { response_format: { type: 'json_object' } } : {}),
-        ...(tools ? { tools, parallel_tool_calls: false } : {}),
-      }, { headers }).withResponse();
+      const { data, response } = await client.chat.completions.create(request, { headers }).withResponse();
       const requestId = response.headers.get(gateway ? 'x-understudy-request-id' : 'x-request-id');
       const environment = gateway ? response.headers.get('x-understudy-environment') : null;
-      onEvent({ type: 'llm_response', stage, data: { callIndex, model, requestId, traceId: gateway ? traceId : null, workload: gateway?.workloads[stage] || null, environment, effectiveModel: gateway ? response.headers.get('x-understudy-effective-model') : data.model || null, route: gateway ? response.headers.get('x-understudy-route') : null, synthetic: mode === 'offline', usage: data.usage || null, finishReason: data.choices?.[0]?.finish_reason } });
+      onEvent({ type: 'llm_response', stage, data: { callIndex, model, requestId, traceId: gateway ? traceId : null, workload: gateway?.workloads[stage] || null, environment, effectiveModel: gateway ? response.headers.get('x-understudy-effective-model') : data.model || null, route: gateway ? response.headers.get('x-understudy-route') : null, synthetic: mode === 'offline', usage: data.usage || null, finishReason: data.choices?.[0]?.finish_reason, durationMs: Math.round(performance.now() - startedAt), response: JSON.parse(JSON.stringify(data)) } });
       if (gateway && (!requestId || environment !== gateway.environment)) throw new Error('Gateway request identity or test environment was not confirmed; inspect existing logs before retrying.');
       const choice = data.choices?.[0];
       if (choice?.finish_reason === 'length') throw new Error(`Model output reached the ${config.maxOutputTokens}-token limit; no truncated response was executed.`);
@@ -55,7 +58,7 @@ export function createModel({ config, mode, fetch: fixtureFetch, onEvent }) {
       onEvent({ type: 'error', stage, data: { message: safe, status: error.status ?? null,
         requestId: error.headers?.get(gateway ? 'x-understudy-request-id' : 'x-request-id') || null,
         environment: gateway ? error.headers?.get('x-understudy-environment') || null : null,
-        callIndex, traceId: gateway ? traceId : null, workload: gateway?.workloads[stage] || null,
+        callIndex, traceId: gateway ? traceId : null, workload: gateway?.workloads[stage] || null, durationMs: Math.round(performance.now() - startedAt),
       } });
       const failure = new Error(safe);
       failure.fatalModelError = true;

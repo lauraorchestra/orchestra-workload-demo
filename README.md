@@ -15,6 +15,24 @@ quality or gateway integration.
 restores the invented records. The UI displays each tool call and database changes.
 `npm test` checks persisted outcomes, mutation validation and failure behavior.
 
+## Understand a run
+
+Open **Run explorer** from the sidebar, or visit `/debug`. Select a run to see
+its final response, database changes, and a chronological record of model calls,
+tool executions, errors, and writes. The four stage descriptions explain what
+the application asks the model to do and how those pieces fit together.
+
+For newly recorded runs, select a model call to read its full system/user prompt,
+earlier conversation messages, available tool definitions, request settings, and
+the exact API response. Tool steps show their arguments and returned results.
+Run history supports loading older pages; viewing a run never executes it again.
+
+Runs created before full capture retain their original events and outcomes, but
+their exact prompts and responses are unavailable. The explorer labels this gap;
+it does not reconstruct missing evidence. New capture records stay in the same
+private, ignored `.understudy` database. API keys and authorization headers are
+never included in the capture.
+
 ## Run directly with OpenAI
 
 With `OPENAI_API_KEY` already exported in your shell, run:

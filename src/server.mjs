@@ -14,6 +14,9 @@ const staticFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
+  ['/debug', ['debug.html', 'text/html; charset=utf-8']],
+  ['/debug.js', ['debug.js', 'text/javascript; charset=utf-8']],
+  ['/debug.css', ['debug.css', 'text/css; charset=utf-8']],
 ]);
 function json(res, code, data) {
   res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
@@ -49,6 +52,14 @@ const server = http.createServer(async (req, res) => {
       return res.end(await readFile(fileURLToPath(new URL(`../public/${file}`, import.meta.url))));
     }
     if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, { ...store.overview(), runs: store.listRuns(), config: publicConfig(config), activeRun });
+    if (req.method === 'GET' && url.pathname === '/api/runs') {
+      const limit = Number(url.searchParams.get('limit') ?? 50);
+      const offset = Number(url.searchParams.get('offset') ?? 0);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) return json(res, 400, { error: 'Use limit 1–100 and a nonnegative integer offset.' });
+      const runs = store.listRuns({ limit: limit + 1, offset });
+      const hasMore = runs.length > limit;
+      return json(res, 200, { runs: runs.slice(0, limit), hasMore, nextOffset: hasMore ? offset + limit : null });
+    }
     if (req.method === 'GET' && url.pathname.startsWith('/api/runs/')) {
       const run = store.getRun(decodeURIComponent(url.pathname.slice('/api/runs/'.length)));
       return json(res, run ? 200 : 404, run || { error: 'Run not found.' });

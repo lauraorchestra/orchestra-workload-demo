@@ -9,7 +9,7 @@ All source and fixtures are invented. SQLite persists under `.understudy/crm.sql
 - `appendEvent(runId,{type,stage,data})` -> stored event. Event has `id`, `at`, `type`, `stage`, `data`.
 - `finishRun(runId,{status,summary,error})` persists `after` snapshot and terminal metadata.
 - `getRun(id)` -> run with `{id,meetingId,mode,status,startedAt,finishedAt,before,after,events,summary,error}`.
-- `listRuns()` -> recent run summaries.
+- `listRuns({limit = 100, offset = 0})` -> run summaries, newest first.
 - `executeTool(name,args,{runId})` supports synchronous deterministic database tools and throws structured/legible errors. It does not dispatch model tools.
 - `reset()` restores seeds and clears runs. Server prevents reset during a running job.
 - `close()` closes DB.
@@ -24,3 +24,12 @@ A deal includes `id,accountId,name,stage,amount,closeDate,nextStep,championConta
 Runner `runMeeting({store,meetingId,mode,config})` returns terminal run. It creates the run first, uses named model stages, journals LLM and tool operations and bounded errors. No silent success on budget/validation/model failures. An optional callback `onRunCreated(run)` can expose async start ID. Server owns only one in-flight run at a time. Read routes: `/api/state` returns `{...overview(),runs,config:{mode,provider,model,liveReady,...}}`; `/api/runs/:id` returns full run. `POST /api/runs {meetingId,mode}` returns HTTP202 `{id}`; `POST /api/reset {}` resets seeded data. All bind to loopback. Static UI only uses same-origin APIs. Public config contains provider selection and limits, never credentials.
 
 UI shows all data as synthetic, mode and configured model, meeting detail/input, run controls, tool timeline, final deal/task changes and errors. Distinguish fixture transport mode from real model mode. Model stage names will be discovered during gateway integration, not preassigned to hosted workloads in this contract.
+
+The read-only `/debug` run explorer uses `GET /api/runs?limit=50&offset=0`
+(`{runs,hasMore,nextOffset}`) and the existing run detail route. New runs include
+`run_context` with the meeting and credential-free configuration snapshot.
+`llm_request.data.request` records the JSON body actually sent to the SDK;
+`llm_response.data.response` records the JSON completion returned by the API.
+Requests and responses share `callIndex`; tool attempts and results share
+`attemptId`. Response/error metadata includes `durationMs`. Older events without
+these fields remain valid and must be shown as missing capture, never inferred.

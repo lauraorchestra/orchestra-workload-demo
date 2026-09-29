@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Run explorer · Orchestra CRM Lab</title>
+  <link rel="stylesheet" href="/debug.css">
+  <script src="/debug.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span aria-hidden="true">o</span> orchestra <small>CRM LAB</small></a>
+    <div class="topbar-actions"><span class="local-badge">Local, synthetic data</span><a class="button" href="/">← Back to CRM</a></div>
+  </header>
+  <div class="explorer">
+    <aside class="run-sidebar" aria-label="Saved runs">
+      <div class="sidebar-heading"><div><p class="eyebrow">EXECUTION HISTORY</p><h1>Run explorer</h1></div><button id="refresh" class="icon-button" type="button" aria-label="Refresh saved runs" title="Refresh saved runs">↻</button></div>
+      <p class="muted">Every attempt tells a story. Choose a run to see what the model read, said, and changed.</p>
+      <p id="history-status" class="small muted" aria-live="polite">Loading saved runs…</p>
+      <nav id="run-list" class="run-list" aria-label="Choose a run"></nav>
+      <button id="load-older" class="button load-older" type="button" hidden>Load older runs</button>
+      <p class="sidebar-note">This view only reads the local journal. Start runs or reset the invented CRM from the main app.</p>
+    </aside>
+    <main id="main-content" class="main-content">
+      <div id="page-error" class="notice error" role="alert" hidden></div>
+      <section id="empty-state" class="empty-state"><span class="empty-symbol" aria-hidden="true">⌁</span><h2>Follow the whole conversation.</h2><p>Select a run from the left. You can inspect its meeting input, every recorded model exchange, tool results, and the final CRM changes.</p><a href="/">Open the CRM →</a></section>
+      <div id="run-content" hidden>
+        <header class="run-heading"><div><p class="eyebrow">MEETING FOLLOW-THROUGH</p><h2 id="run-title"></h2><p id="run-meta" class="muted"></p></div><div id="run-status"></div></header>
+        <div id="recording-notice" class="notice" hidden></div>
+        <div id="run-error" class="notice error" hidden></div>
+        <details class="how-it-works card" id="how-it-works">
+          <summary>New to this app? Here is how it works.</summary>
+          <div class="guide-content">
+            <p>A salesperson has meeting notes and an outdated CRM. This agent reads the notes, finds the right deal, updates it, and creates a local follow-up task. All companies, people, and notes in this lab are invented.</p>
+            <ol class="guide-stages">
+              <li><strong>Extract meeting facts.</strong> One model request turns the notes into facts and uncertainties.</li>
+              <li><strong>Reconcile the deal.</strong> The main agent asks for CRM tools, reads their results, and decides what to do next. This conversation usually takes several model requests.</li>
+              <li><strong>Assess deal readiness.</strong> A separate model request checks the sales stage against the meeting, deal, and history before a deal update is saved.</li>
+              <li><strong>Draft a follow-up.</strong> A separate model request writes a task. The main agent then asks a tool to save that task in the CRM.</li>
+            </ol>
+            <p>These are <strong>four types of work, not four consecutive messages</strong>. Assessment and drafting happen inside the main agent’s tool loop. A model request sends the conversation so far; a model response may contain text, tool requests, or both. The application executes those tools and returns their results in the next model request.</p>
+            <div class="guide-key"><p><strong>Model call</strong><br>The AI reads messages and produces a response.</p><p><strong>Tool call</strong><br>The application reads CRM records, invokes an analysis step, or writes a change.</p><p><strong>Database change</strong><br>An actual local write, shown separately from what the model proposed.</p></div>
+            <p>No email is sent and no external CRM is modified. Failed runs can still have saved changes; the before/after snapshots show what actually happened. Offline runs use fixture responses and are not evidence of real model behavior.</p>
+          </div>
+        </details>
+        <section id="run-stats" class="run-stats" aria-label="Run totals"></section>
+        <details class="card overview" id="overview" open>
+          <summary>Outcome, meeting input &amp; database changes</summary>
+          <div id="outcome-content" class="overview-content"></div>
+        </details>
+        <section class="stages-section" aria-labelledby="stages-title">
+          <div class="section-heading"><div><h3 id="stages-title">Follow the work</h3><p class="muted">Choose a stage to filter the steps below.</p></div><button id="all-stages" class="button active" type="button" aria-pressed="true">All stages</button></div>
+          <div id="stage-list" class="stage-list"></div>
+        </section>
+        <div class="inspection-grid">
+          <section class="steps-card card" aria-labelledby="steps-title">
+            <div class="steps-heading"><h3 id="steps-title">Interaction timeline</h3><span id="step-count" class="muted small"></span></div>
+            <p class="timeline-note">Ordered by when each step started. Tool calls can contain other steps; their results may arrive later.</p>
+            <div id="step-list" class="step-list"></div>
+          </section>
+          <section id="step-detail" class="detail-card card" aria-label="Selected step details"></section>
+        </div>
+        <footer><span id="connection-status" aria-live="polite"></span><span>Recorded evidence only · No prompts are reconstructed</span></footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

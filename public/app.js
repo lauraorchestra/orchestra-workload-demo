@@ -194,6 +194,9 @@ function renderTimeline() {
   $("event-count").textContent = `${events.length} ${events.length === 1 ? "EVENT" : "EVENTS"}`;
   $("run-metadata").hidden = false;
   $("run-metadata").replaceChildren(element("span", "", `${run.mode === "live" ? "Real model" : "Fixture / offline"} · ${date(run.startedAt, true)}`), element("span", "", run.finishedAt ? `Finished ${time(run.finishedAt)}` : "Following the execution journal…"));
+  const debugLink = element("a", "run-debug-link", "Explore prompts, responses and tools →");
+  debugLink.href = `/debug?run=${encodeURIComponent(run.id)}`;
+  $("run-metadata").append(debugLink);
   const timeline = $("timeline");
   const wasAtBottom = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 60;
   const openDetails = new Set(Array.from(timeline.querySelectorAll("details[open]")).map((node) => node.dataset.eventId));
