@@ -9,6 +9,22 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] !== '--reset') { if (!args[i + 1] || args[i + 1].startsWith('--')) throw new Error('Missing argument value.'); i++; }
 }
 const store = openStore();
+let activeRun = null;
+function shutdown(signal) {
+  try {
+    if (activeRun) store.finishRun(activeRun, {
+      status: 'failed',
+      error: `Application stopped by ${signal} during run; review any already-applied database changes before resuming.`,
+    });
+  } finally {
+    store.close();
+    process.exit(signal === 'SIGINT' ? 130 : 143);
+  }
+}
+const onInterrupt = () => shutdown('SIGINT');
+const onTerminate = () => shutdown('SIGTERM');
+process.on('SIGINT', onInterrupt);
+process.on('SIGTERM', onTerminate);
 try {
   if (args.includes('--reset')) {
     if (args.length !== 1) throw new Error('Use --reset by itself.');
@@ -19,9 +35,14 @@ try {
     const mode = value('--mode') || config.mode;
     if (!['offline', 'live'].includes(mode)) throw new Error('Invalid mode.');
     const meetingId = value('--meeting') || store.overview().meetings[0]?.id;
-    const run = await runMeeting({ store, meetingId, mode, config });
+    const run = await runMeeting({ store, meetingId, mode, config, onRunCreated: run => { activeRun = run.id; } });
+    activeRun = null;
     const responses = run.events.filter(e => e.type === 'llm_response');
     console.log(JSON.stringify({ id: run.id, status: run.status, mode, modelCalls: run.events.filter(e => e.type === 'llm_request').length, completedModelCalls: responses.length, toolCalls: run.events.filter(e => e.type === 'tool_call').length, stages: [...new Set(responses.map(e => e.stage))], requestIds: responses.map(e => e.data.requestId).filter(Boolean), summary: run.summary, error: run.error }, null, 2));
     if (run.status !== 'succeeded') process.exitCode = 1;
   }
-} finally { store.close(); }
+} finally {
+  process.off('SIGINT', onInterrupt);
+  process.off('SIGTERM', onTerminate);
+  store.close();
+}
