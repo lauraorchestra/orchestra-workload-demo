@@ -15,21 +15,57 @@ quality or gateway integration.
 restores the invented records. The UI displays each tool call and database changes.
 `npm test` checks persisted outcomes, mutation validation and failure behavior.
 
-Real model runs preserve OpenAI Chat Completions and the initial `gpt-4.1-mini`
-model setting. `npm run start:gateway` runs the application under the default
+## Run directly with OpenAI
+
+With `OPENAI_API_KEY` already exported in your shell, run:
+
+```sh
+npm run start:openai
+```
+
+Open http://127.0.0.1:4317 and run a meeting follow-through. This explicitly
+enables live OpenAI Chat Completions with `gpt-4o`. The key stays in the server's
+environment; do not paste it into the browser, source, or command arguments.
+The direct mode fixes the endpoint to `https://api.openai.com/v1` and ignores
+gateway configuration and `OPENAI_BASE_URL`. It sends no Understudy credentials
+or workload headers. Existing gateway setup and run history remain available.
+
+For one terminal run, use `npm run run:openai`. `CRM_MODEL` can select an
+intentional alternative; the direct mode defaults to `gpt-4o`. `npm start` still
+defaults to offline fixtures, so having a shell key alone does not enable live
+traffic. Stop the server before switching between direct and gateway modes.
+
+For a fresh baseline while preserving an earlier database and its history, choose
+a separate private path:
+
+```sh
+CRM_DB_PATH=.understudy/openai-baseline/crm.sqlite npm run start:openai
+```
+
+Keep that same `CRM_DB_PATH` when later testing the gateway against this data.
+The UI and terminal use `.understudy/crm.sqlite` when it is omitted. Reset and
+recovery also act on the selected database.
+
+## Run through Orchestra
+
+Gateway runs preserve OpenAI Chat Completions and default to `gpt-4.1-mini`.
+Use `CRM_MODEL=gpt-4o npm run start:gateway` when comparing against the direct
+GPT-4o baseline without changing models. `npm run start:gateway` runs the application under the default
 `understudy keys exec` command. Its private `.understudy/gateway.json` supplies the
 verified organization, gateway origin, project slug, stage-to-workload-name map, test environment,
 and saved credential reference. The CLI injects the key directly into the child
 process; no key is stored in this app. Missing or mismatched gateway configuration
-fails closed. Native-provider credential fallback is disabled.
+fails closed. Gateway mode never falls back to a native-provider key.
 
 `npm run run:gateway` executes one bounded real-model run in the terminal using
-the same private configuration. Each run is capped at 16 model requests and 40
+the same private configuration. Both providers cap each run at 16 model requests and 40
 tools by default, with a 2,400-token output limit per request and SDK retries disabled. `CRM_MAX_MODEL_CALLS` can lower this
 budget (maximum 20). Live requests are billable. All four model tasks must run,
 and both local writes must succeed, before the workflow reports completion.
-The audit retains attempted/returned requests, scoped gateway IDs, environment,
-model/route receipts and errors. Fixture results remain explicitly synthetic.
+The audit retains attempted/returned requests, provider request IDs, model
+receipts and errors. Gateway runs additionally record workload, trace, environment
+and route receipts. Direct OpenAI runs have no Orchestra request logs or workloads
+until the application is connected. Fixture results remain explicitly synthetic.
 Management IDs are used when checking exact request logs through the CLI;
 inference headers use the project slug and workload name. Verify both against
 the actual indexed request before accepting attribution.

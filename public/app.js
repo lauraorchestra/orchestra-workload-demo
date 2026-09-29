@@ -164,7 +164,7 @@ function renderControls() {
   document.querySelectorAll('input[name="mode"]').forEach((input) => { input.checked = input.value === state.mode; input.disabled = state.busy; });
   $("model-value").textContent = state.mode === "offline" ? "Fixture responses · no LLM requests" : config.model || "No model configured";
   $("budget-value").textContent = state.mode === "offline" ? "0 live model calls" : budgetLabel(config);
-  $("live-readiness").textContent = config.liveReady ? `Live configuration is ready. Configured model: ${config.model || "unspecified"}. Real-model mode uses the configured gateway.` : "Real-model mode is unavailable until the local server has verified live configuration.";
+  $("live-readiness").textContent = config.liveReady ? `Live configuration is ready. Configured model: ${config.model || "unspecified"}. ${config.provider === "openai" ? "Requests go directly to OpenAI." : "Requests use the configured Orchestra gateway."}` : "Real-model mode is unavailable until the local server has verified live configuration.";
   $("mode-explanation").textContent = state.mode === "offline" ? "Offline mode exercises the tool workflow using fixture responses. It does not prove live model behavior." : "Real-model mode makes bounded inference requests. Tools update only this synthetic local CRM; every call is journaled.";
   $("run-button").disabled = !state.data || !state.meetingId || accountForMeeting(getMeeting())?.id !== state.accountId || state.busy || (state.mode === "live" && !config.liveReady);
   $("run-button-label").textContent = state.busy ? "Follow-through is running…" : state.mode === "live" ? "Run with real model" : "Run fixture follow-through";

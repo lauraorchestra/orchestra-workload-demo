@@ -17,6 +17,7 @@ function setup(t) {
 test('gateway configuration derives SDK prefix and never falls back to native credentials', t => {
   const {env} = setup(t);
   const config = readConfig(env);
+  assert.equal(config.provider, 'understudy');
   assert.equal(config.baseURL, 'https://gateway.example.invalid/v1');
   assert.equal(config.model, 'gpt-4.1-mini');
   assert.equal(config.liveReady, true);
@@ -24,6 +25,7 @@ test('gateway configuration derives SDK prefix and never falls back to native cr
   assert.throws(() => readConfig({...env, UNDERSTUDY_ORG_ID: 'synthetic-other-org'}), /organization/);
   assert.throws(() => readConfig({...env, UNDERSTUDY_GATEWAY_URL: env.UNDERSTUDY_GATEWAY_URL+'/v1'}), /origin/);
   assert.equal(readConfig({CRM_ALLOW_LIVE:'1', OPENAI_API_KEY:'synthetic-native-key'}).liveReady, false);
+  assert.equal(readConfig({...env, CRM_PROVIDER:'understudy', OPENAI_API_KEY:'synthetic-native-key', OPENAI_BASE_URL:'https://other.example.invalid'}).apiKey, env.UNDERSTUDY_API_KEY);
 });
 test('actual SDK preserves protocol/model and concurrent stage attribution with exact receipts', async t => {
   const {env, gateway} = setup(t);
@@ -32,7 +34,7 @@ test('actual SDK preserves protocol/model and concurrent stage attribution with 
     const req = input instanceof Request ? input : new Request(input, init);
     const body = await req.json();
     requests.push({url:req.url,headers:req.headers,body});
-    return new Response(JSON.stringify({id:'synthetic-completion',object:'chat.completion',created:1,model:body.model,choices:[{index:0,finish_reason:'stop',message:{role:'assistant',content:'{"ok":true}'}}]}), {headers:{'content-type':'application/json','x-understudy-request-id':`synthetic-${req.headers.get('x-lab-stage')}`,'x-understudy-environment':'test','x-understudy-effective-model':body.model,'x-understudy-route':'managed'}});
+    return new Response(JSON.stringify({id:'synthetic-completion',object:'chat.completion',created:1,model:'synthetic-response-model',choices:[{index:0,finish_reason:'stop',message:{role:'assistant',content:'{"ok":true}'}}]}), {headers:{'content-type':'application/json','x-understudy-request-id':`synthetic-${req.headers.get('x-lab-stage')}`,'x-understudy-environment':'test','x-understudy-effective-model':body.model,'x-understudy-route':'managed'}});
   }});
   await Promise.all(stages.map(s => complete(s,[{role:'user',content:'Synthetic transport exercise.'}],{json:true})));
   assert.equal(requests.length,4);
@@ -52,6 +54,7 @@ test('actual SDK preserves protocol/model and concurrent stage attribution with 
   assert.equal(events.filter(e=>e.type==='llm_response').length,4);
   for (const request of events.filter(e=>e.type==='llm_request')) assert.equal(events.find(e=>e.type==='llm_response' && e.stage===request.stage).data.callIndex, request.data.callIndex);
   assert.ok(events.filter(e=>e.type==='llm_response').every(e=>e.data.requestId===`synthetic-${e.stage}` && e.data.environment==='test'));
+  assert.ok(events.filter(e=>e.type==='llm_response').every(e=>e.data.effectiveModel==='gpt-4.1-mini'));
   await assert.rejects(complete('unmappedStage',[]),/No workload mapping/);
   assert.equal(requests.length,4);
 });

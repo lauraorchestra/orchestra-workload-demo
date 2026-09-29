@@ -5,7 +5,7 @@ import { openStore, StoreError } from './store.mjs';
 import { readConfig, publicConfig } from './config.mjs';
 import { runMeeting } from './runner.mjs';
 
-const store = openStore();
+const store = openStore({ path: process.env.CRM_DB_PATH });
 const config = readConfig();
 const port = Number(process.env.CRM_PORT || 4317);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid local port.');
