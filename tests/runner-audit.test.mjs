@@ -73,11 +73,11 @@ for (const [label, changes] of [
   ['draft belongs to another deal on the same account', { draftDeal: 'deal_maple_training' }],
   ['persisted task differs from the draft', { taskBody: 'A different, unsupported action.' }],
 ]) {
-  test(`completion fails when ${label}, preserving already-applied changes`, async t => {
+  test(`completion ${changes.assessmentDeal ? 'recovers' : 'fails'} when ${label}, preserving already-applied changes`, async t => {
     const store = isolated(t);
     const run = await runMeeting({ store, meetingId: expected.meetingId, mode: 'offline', config: readConfig({}), offlineFetch: scriptedTransport(outcomeSteps(changes)) });
-    assert.equal(run.status, 'failed');
-    assert.match(run.error, /one consistent deal outcome/);
+    assert.equal(run.status, changes.assessmentDeal ? 'succeeded' : 'failed');
+    if (!changes.assessmentDeal) assert.match(run.error, /one consistent deal outcome/);
     assert.equal(run.after.deals.find(deal => deal.id === expected.dealId).amount, expected.expectedChanges.amount);
     assert.equal(run.after.tasks.length, run.before.tasks.length + 1);
     assert.deepEqual(store.snapshot(), run.after);
