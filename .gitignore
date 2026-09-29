@@ -1,0 +1,8 @@
+node_modules/
+.understudy/
+.env
+.env.*
+!.env.example
+*.log
+*.tgz
+.DS_Store
