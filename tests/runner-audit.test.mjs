@@ -16,27 +16,17 @@ function isolated(t) {
 
 // Exercise the real SDK and runner with deliberately incorrect tool decisions.
 // This transport never contacts a service or exposes the oracle to live models.
-function scriptedTransport(steps, stageAnswers = {}) {
+function scriptedTransport(steps) {
   let turn = 0;
   return async (input, init) => {
     const request = input instanceof Request ? input : new Request(input, init);
-    const stage = request.headers.get('x-lab-stage');
+    assert.equal(request.headers.get('x-lab-stage'), 'meetingFollowThrough');
     const body = await request.json();
-    let message;
-    if (stage === 'reconcileDeal') {
-      const step = steps[turn++];
-      message = step ? { role: 'assistant', content: null, tool_calls: [{
-        id: `synthetic_call_${turn}`, type: 'function',
-        function: { name: step.name, arguments: step.rawArguments ?? JSON.stringify(step.args) },
-      }] } : { role: 'assistant', content: 'The work is complete.' };
-    } else {
-      const answer = stageAnswers[stage] ?? {
-        extractMeetingFacts: { accountHint: 'Synthetic meeting', facts: [], uncertainties: [] },
-        assessDealReadiness: { stage: 'negotiation', rationale: 'Synthetic assessment.', evidence: [expected.meetingId] },
-        draftFollowUp: expected.expectedTask,
-      }[stage];
-      message = { role: 'assistant', content: typeof answer === 'string' ? answer : JSON.stringify(answer) };
-    }
+    const step = steps[turn++];
+    const message = step ? { role: 'assistant', content: null, tool_calls: [{
+      id: `synthetic_call_${turn}`, type: 'function',
+      function: { name: step.name, arguments: step.rawArguments ?? JSON.stringify(step.args) },
+    }] } : { role: 'assistant', content: 'Scripted conversation ended; inspect the recorded actions and errors.' };
     return new Response(JSON.stringify({
       id: 'synthetic_completion', object: 'chat.completion', created: 1, model: body.model,
       choices: [{ index: 0, message, finish_reason: message.tool_calls ? 'tool_calls' : 'stop' }],
@@ -44,11 +34,9 @@ function scriptedTransport(steps, stageAnswers = {}) {
   };
 }
 
-function outcomeSteps({ assessmentDeal = expected.dealId, draftDeal = expected.dealId, taskDeal = expected.dealId, taskBody = expected.expectedTask.body } = {}) {
+function outcomeSteps({ taskDeal = expected.dealId, taskBody = expected.expectedTask.body } = {}) {
   return [
-    { name: 'assess_deal_readiness', args: { dealId: assessmentDeal } },
     { name: 'update_deal', args: { dealId: expected.dealId, expectedVersion: 1, changes: expected.expectedChanges, evidence: [expected.meetingId] } },
-    { name: 'draft_follow_up', args: { dealId: draftDeal } },
     { name: 'create_follow_up_task', args: { dealId: taskDeal, ...expected.expectedTask, body: taskBody, evidence: [expected.meetingId] } },
   ];
 }
@@ -68,16 +56,13 @@ function assertPairedAudit(run) {
 }
 
 for (const [label, changes] of [
-  ['task belongs to another deal on the same account', { taskDeal: 'deal_maple_training' }],
-  ['assessment belongs to another deal on the same account', { assessmentDeal: 'deal_maple_training' }],
-  ['draft belongs to another deal on the same account', { draftDeal: 'deal_maple_training' }],
-  ['persisted task differs from the draft', { taskBody: 'A different, unsupported action.' }],
+  ['a task belongs to another deal on the same account', { taskDeal: 'deal_maple_training' }],
+  ['task wording was chosen by the agent', { taskBody: 'A different action selected by the scripted agent.' }],
 ]) {
-  test(`completion ${changes.assessmentDeal ? 'recovers' : 'fails'} when ${label}, preserving already-applied changes`, async t => {
+  test(`persisted results are checked without grading business judgment when ${label}`, async t => {
     const store = isolated(t);
     const run = await runMeeting({ store, meetingId: expected.meetingId, mode: 'offline', config: readConfig({}), offlineFetch: scriptedTransport(outcomeSteps(changes)) });
-    assert.equal(run.status, changes.assessmentDeal ? 'succeeded' : 'failed');
-    if (!changes.assessmentDeal) assert.match(run.error, /one consistent deal outcome/);
+    assert.equal(run.status, 'succeeded');
     assert.equal(run.after.deals.find(deal => deal.id === expected.dealId).amount, expected.expectedChanges.amount);
     assert.equal(run.after.tasks.length, run.before.tasks.length + 1);
     assert.deepEqual(store.snapshot(), run.after);
@@ -91,46 +76,37 @@ test('every malformed or rejected tool attempt has one raw call and one error re
   const malformed = '{"dealId":';
   const steps = [
     { name: 'get_deal', rawArguments: malformed },
-    { name: 'assess_deal_readiness', args: { dealId: expected.dealId, unexpected: true } },
-    { name: 'draft_follow_up', args: { dealId: 'synthetic_missing_deal' } },
+    { name: 'get_deal', args: { dealId: expected.dealId, unexpected: true } },
+    { name: 'get_deal', args: { dealId: 'synthetic_missing_deal' } },
     { name: 'unavailable_tool', args: {} },
   ];
   const run = await runMeeting({ store, meetingId: expected.meetingId, mode: 'offline', config: readConfig({}), offlineFetch: scriptedTransport(steps) });
-  assert.equal(run.status, 'failed');
+  assert.equal(run.status, 'succeeded', 'a completed conversation can explain rejected actions without making changes');
   assert.deepEqual(store.snapshot(), before);
   const { calls, results } = assertPairedAudit(run);
-  assert.equal(calls.length, 5, 'four requested tools plus the nested deal lookup');
+  assert.equal(calls.length, 4);
   assert.equal(calls[0].data.rawArguments, malformed);
   assert.ok(results.every(result => typeof result.data.error === 'string'));
-  assert.ok(calls.some(call => call.stage === 'draft_follow_up' && call.data.name === 'get_deal'));
 });
 
-test('nested tool budget rejection journals both the rejected lookup and outer model tool', async t => {
+test('tool budget rejection journals the rejected attempt and stops execution', async t => {
   const store = isolated(t);
   const before = store.snapshot();
-  const run = await runMeeting({ store, meetingId: expected.meetingId, mode: 'offline', config: { ...readConfig({}), maxToolCalls: 1 }, offlineFetch: scriptedTransport([{ name: 'assess_deal_readiness', args: { dealId: expected.dealId } }]) });
+  const steps = [{ name: 'get_deal', args: { dealId: expected.dealId } }, { name: 'list_tasks', args: { dealId: expected.dealId } }];
+  const run = await runMeeting({ store, meetingId: expected.meetingId, mode: 'offline', config: { ...readConfig({}), maxToolCalls: 1 }, offlineFetch: scriptedTransport(steps) });
   assert.equal(run.status, 'failed');
   assert.match(run.error, /budget exhausted/);
   assert.deepEqual(store.snapshot(), before);
   const { calls, results } = assertPairedAudit(run);
   assert.equal(calls.length, 2);
-  assert.ok(results.every(result => /budget exhausted/.test(result.data.error)));
-  assert.equal(run.events.filter(event => event.type === 'llm_request').length, 2, 'no nested model request after exhausted tool budget');
-});
-
-test('invalid nested model output still completes the outer tool audit', async t => {
-  const store = isolated(t);
-  const run = await runMeeting({ store, meetingId: expected.meetingId, mode: 'offline', config: readConfig({}), offlineFetch: scriptedTransport([{ name: 'draft_follow_up', args: { dealId: expected.dealId } }], { draftFollowUp: '{broken' }) });
-  assert.equal(run.status, 'failed');
-  const { calls, results } = assertPairedAudit(run);
-  assert.equal(calls.length, 3);
-  assert.ok(results.find(result => result.data.name === 'draft_follow_up').data.error);
-  assert.equal(results.filter(result => result.data.result).length, 2, 'both successful nested reads remain recorded');
+  assert.ok(results[0].data.result);
+  assert.match(results[1].data.error, /budget exhausted/);
+  assert.equal(run.events.filter(event => event.type === 'llm_request').length, 2);
 });
 
 test('retry after final-response budget exhaustion reuses the persisted equivalent task', async t => {
   const store = isolated(t);
-  const first = await runMeeting({ store, meetingId: expected.meetingId, mode: 'offline', config: readConfig({ CRM_MAX_MODEL_CALLS: '13' }) });
+  const first = await runMeeting({ store, meetingId: expected.meetingId, mode: 'offline', config: readConfig({ CRM_MAX_MODEL_CALLS: '9' }) });
   assert.equal(first.status, 'failed');
   assert.match(first.error, /budget exhausted/);
   assert.equal(first.after.tasks.length, first.before.tasks.length + 1);

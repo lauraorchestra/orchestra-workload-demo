@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { crmAgent } from './agent.mjs';
 
 export function readConfig(env = process.env) {
   const provider = env.CRM_PROVIDER || 'understudy';
@@ -20,9 +21,8 @@ export function readConfig(env = process.env) {
     const origin = new URL(env.UNDERSTUDY_GATEWAY_URL || '');
     if (origin.protocol !== 'https:' || origin.origin !== gateway.origin || origin.pathname !== '/' || origin.search || origin.hash || origin.username || origin.password) throw new Error('Gateway origin does not match the verified application configuration.');
     if (typeof gateway.project !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(gateway.project) || gateway.environment !== 'test') throw new Error('This synthetic lab requires a project slug (not a management ID) and test request environment.');
-    for (const stage of ['extractMeetingFacts', 'reconcileDeal', 'assessDealReadiness', 'draftFollowUp']) {
-      if (typeof gateway.workloads?.[stage] !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(gateway.workloads[stage])) throw new Error(`Missing workload name (not a management ID) for ${stage}.`);
-    }
+    const workload = gateway.workloads?.[crmAgent.stage];
+    if (typeof workload !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(workload)) throw new Error(`Missing workload name (not a management ID) for ${crmAgent.stage}.`);
     apiKey = env.UNDERSTUDY_API_KEY;
     baseURL = `${origin.origin}/v1`;
   }

@@ -38,6 +38,29 @@ export const seed = {
     { id: 'tl_lantern_delivery', accountId: 'acct_lantern', dealId: 'deal_lantern_sensors', occurredAt: '2026-10-12T11:00:00.000Z', kind: 'call', title: 'Delivery planning', body: 'Eden confirmed that the field kit coordination deal remains in negotiation at $36,000. Delivery dates need one more check before a November 6 close.' },
   ],
   meetings: [{
+    id: 'mtg_maple_2026_10_21', accountId: 'acct_maple_works', title: 'Maple Works — two opportunities, next steps', accountHint: 'Maple Works (exhibition fixtures; mapleworks.example.invalid)', occurredAt: '2026-10-21T16:00:00.000Z',
+    note: `Wholly invented meeting notes — October 21, 2026.
+
+Quinn met with Maya Chen and Alex Mercer at Maple Works, the exhibition-fixture company. Maya said the two-studio operations subscription is still $48,000 annually, with November 20 as the target for signature. She's driving the rollout now; Alex remains the executive sponsor. Security has cleared the questionnaire, and Devon is working through the contract wording. Nothing has been signed yet. Maya asked Quinn to prepare a summary of the remaining contract questions for Devon by October 23, and Quinn agreed. The next conversation should be about those contract questions, rather than another security questionnaire.
+
+Alex then brought up the facilitator training package, which has its own budget. They finished the discovery discussion and agreed on a two-day workshop for $12,000. Alex wants a written proposal before deciding, aiming to make that decision on December 4. Quinn agreed to prepare the workshop outline and quote by October 26. Alex is still the point person for training. The existing December task about a training discovery agenda is old planning work; nobody discussed canceling it on this call.
+
+Maya joked about adding a third studio next year, but said there isn't a budget or schedule for that yet. Quinn closed by repeating the two promised documents and their dates.`,
+  }, {
+    id: 'mtg_maple_2026_10_22', accountId: 'acct_maple_works', title: 'Maple Works — an unclear hallway update', accountHint: 'Maple Works (exhibition fixtures; mapleworks.example.invalid)', occurredAt: '2026-10-22T17:00:00.000Z',
+    note: `Wholly invented meeting notes — October 22, 2026.
+
+Quinn had a short hallway conversation with Alex at Maple Works. Alex said, "I heard phase two might be around fifteen thousand, but I'm not sure whether that was the training idea or something Maya was exploring. Don't hold me to it."
+
+Quinn asked whether there was an approved scope or a target date. Alex didn't know and said he would need to ask the team. He couldn't say who owned this possible work. The conversation ended when Alex had to join another call. No follow-up owner or deadline was agreed, and nobody discussed changing either current opportunity.`,
+  }, {
+    id: 'mtg_lantern_2026_10_15', accountId: 'acct_lantern', title: 'Lantern Field Labs — a check-in with no new commitments', accountHint: 'Lantern Field Labs (lanternfield.example.invalid)', occurredAt: '2026-10-15T15:00:00.000Z',
+    note: `Wholly invented meeting notes — October 15, 2026.
+
+Quinn caught up with Eden Shaw at Lantern Field Labs about field kit coordination. Eden said they're still negotiating the $36,000 plan and aiming for November 6. Eden remains the lead on their side. The school-term delivery window still needs checking, and Quinn already has that follow-up on the calendar for October 20.
+
+Eden hasn't received new information from the schools. They agreed there was no reason to add another reminder for the same delivery question. There were no new commercial terms, promised documents, deadlines, or decisions today.`,
+  }, {
     id: 'mtg_maple_2026_10_14', accountId: 'acct_maple_works', title: 'Maple Works — rollout scope and procurement', accountHint: 'Maple Works (exhibition fixtures; mapleworks.example.invalid)', occurredAt: '2026-10-14T16:00:00.000Z',
     note: `Wholly invented meeting notes — October 14, 2026, 11:00–11:45 a.m. Central.
 

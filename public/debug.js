@@ -4,23 +4,25 @@ const $ = id => document.getElementById(id);
 const array = value => Array.isArray(value) ? value : [];
 const activeRun = run => ["running", "pending", "queued", "starting"].includes(run?.status);
 const state = { runs: [], nextOffset: 0, hasMore: false, meetings: [], selectedId: null, run: null, items: [], itemKey: null, stage: null, request: 0, timer: null, loading: false };
-const stages = [
+const knownStages = [
+  { id: "meetingFollowThrough", title: "Meeting follow-through agent", description: "One shared conversation. The model chooses which CRM tools to call and when it has enough information to respond." },
   { id: "extractMeetingFacts", title: "Extract meeting facts", description: "Read the notes and identify facts, decisions, and uncertainties." },
   { id: "reconcileDeal", title: "Reconcile the deal", description: "Find the right records and coordinate the CRM tool loop." },
   { id: "assessDealReadiness", title: "Assess deal readiness", description: "Check the proposed sales stage before saving the deal." },
   { id: "draftFollowUp", title: "Draft a follow-up", description: "Write the task for the main agent to save in the CRM." },
 ];
-const stageNames = Object.fromEntries(stages.map(stage => [stage.id, stage.title]));
+const stageNames = Object.fromEntries(knownStages.map(stage => [stage.id, stage.title]));
 const toolDescriptions = {
   search_accounts: "Search the local CRM for candidate accounts. A similar name may belong to a different company.",
   get_account: "Read an account and its contacts to verify the company and people involved.",
   list_deals: "Read the account’s deals to identify the opportunity discussed in the meeting.",
+  list_tasks: "Read the deal’s existing tasks before deciding whether another follow-up is needed. An existing task should not be duplicated.",
   get_deal: "Read the deal’s current fields and version before proposing a change.",
   get_timeline: "Read dated account history and its evidence references.",
   get_field_definitions: "Read which CRM fields can be changed and which values they accept.",
-  assess_deal_readiness: "This tool runs a separate model analysis. It reads the deal and history, then asks which sales stage the evidence supports. Its nested steps appear separately in the timeline.",
-  draft_follow_up: "This tool reads the updated deal and history, then asks a separate model call to draft a task. The draft itself does not save a task or send anything.",
-  update_deal: "Save a change to the local deal. The application checks the current version and supporting evidence, and requires a consistent readiness assessment before saving.",
+  assess_deal_readiness: "This historical tool ran a separate model analysis. It read the deal and history, then asked which sales stage the evidence supported. Its recorded nested steps appear separately in the timeline. New runs use one agent conversation instead.",
+  draft_follow_up: "This historical tool read the updated deal and history, then asked a separate model call to draft a task. The draft itself did not save a task or send anything. New runs let the main agent draft tasks directly.",
+  update_deal: "Save a change to the local deal. The application validates the allowed fields, record version, account scope and supporting evidence references. The model is responsible for deciding whether the change is justified.",
   create_follow_up_task: "Save a follow-up task in the local CRM. This does not send email or contact anyone.",
 };
 function node(tag, className, text) {
@@ -39,7 +41,7 @@ function date(value) { const result = new Date(value); return Number.isNaN(resul
 function duration(ms) { return Number.isFinite(ms) && ms >= 0 ? ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s` : "Not recorded"; }
 function status(statusValue) {
   const known = ["succeeded", "failed", "cancelled", "running", "pending", "queued"].includes(statusValue) ? statusValue : "unknown";
-  return node("span", `status status-${known}`, prettyName(statusValue || "Unknown"));
+  return node("span", `status status-${known}`, statusValue === "succeeded" ? "Completed" : prettyName(statusValue || "Unknown"));
 }
 function setNotice(id, message) { $(id).textContent = message || ""; $(id).hidden = !message; }
 function missing(text) { return node("p", "missing", text); }
@@ -149,17 +151,22 @@ function itemDescription(item) {
 }
 function pairIndexLabel(item) { return item.pairIndex > item.index + 1 ? ` · finishes at event ${item.pairIndex + 1}` : ""; }
 function renderStages() {
+  // Display only model stages present in this run, including preserved legacy runs.
+  const observed = [...new Set(state.items.filter(item => item.kind === "model").map(item => item.stage).filter(Boolean))];
+  const stages = observed.map(id => knownStages.find(stage => stage.id === id) || { id, title: prettyName(id), description: "A model stage recorded by this version of the application." });
+  if (state.stage && !observed.includes(state.stage)) state.stage = null;
   $("all-stages").classList.toggle("active", !state.stage);
   $("all-stages").setAttribute("aria-pressed", String(!state.stage));
-  $("stage-list").replaceChildren(...stages.map((stage, index) => {
+  $("stage-list").classList.toggle("single-stage", stages.length === 1);
+  $("stage-list").replaceChildren(...(stages.length ? stages.map((stage, index) => {
     const items = state.items.filter(item => item.stage === stage.id);
     const modelCount = items.filter(item => item.event.type === "llm_request").length;
     const button = node("button", `stage${state.stage === stage.id ? " active" : ""}`); button.type = "button";
     button.setAttribute("aria-pressed", String(state.stage === stage.id));
-    button.append(node("span", "stage-number", `JOB ${index + 1}`), node("strong", "", stage.title), node("p", "", stage.description), node("span", "count", items.length ? `${modelCount} model ${modelCount === 1 ? "call" : "calls"} · ${items.length} steps` : "No recorded steps"));
+    button.append(node("span", "stage-number", stage.id === "meetingFollowThrough" ? "ONE AGENT · SHARED CONVERSATION" : `RECORDED STAGE ${index + 1}`), node("strong", "", stage.title), node("p", "", stage.description), node("span", "count", `${modelCount} model ${modelCount === 1 ? "call" : "calls"} · ${items.length} steps`));
     button.addEventListener("click", () => filterStage(state.stage === stage.id ? null : stage.id));
     return button;
-  }));
+  }) : [node("p", "empty-copy", "No model calls have been recorded yet.")]));
 }
 function filterStage(stage) { state.stage = stage; renderStages(); renderSteps(); renderDetail(); }
 function renderSteps() {
@@ -320,8 +327,9 @@ function renderOutcome() {
   const run = state.run, body = $("outcome-content"), context = runContext(run);
   const opened = new Set(Array.from(body.querySelectorAll("details[open][data-key]")).map(entry => entry.dataset.key));
   body.replaceChildren();
-  if (run.summary) body.append(node("h4", "", "Final application summary"), node("p", "", valueText(run.summary)));
+  if (run.summary) body.append(node("h4", "", "Final recorded response / summary"), node("p", "", valueText(run.summary)));
   else body.append(node("p", "muted", activeRun(run) ? "This run is still active. A final summary and final database snapshot are not available yet." : "No final summary was recorded."));
+  if (run.status === "succeeded") body.append(node("p", "outcome-explanation", "Completed means the agent loop ended, not that an evaluator verified the answer. Review the response and changes below; making no changes or asking for clarification can be appropriate."));
   if (context?.meeting) body.append(details("Meeting input recorded at the start of this run", jsonBlock(context.meeting), "meeting-input"));
   else body.append(missing("A starting meeting snapshot was not recorded for this older run. Today’s meeting record is not substituted for historical input."));
   if (context) body.append(details("Recorded run configuration and limits", jsonBlock(Object.fromEntries(Object.entries(context).filter(([key]) => key !== "meeting"))), "run-config"));
@@ -346,7 +354,7 @@ function renderOutcome() {
         body.append(node("h4", "change-title", `${prettyName(collection)} · ${label} · ${!previous ? "Created" : !current ? "Removed" : "Updated"}`), changeTable(previous, current));
       }
     }
-    if (!changed) body.append(node("p", "muted", "The before and after snapshots contain no database changes."));
+    if (!changed) body.append(node("p", "muted", "The before and after snapshots contain no database changes. Read the final response to see whether nothing was needed, the evidence was ambiguous, or the agent could not complete the work."));
     body.append(details("Full database snapshots (before and after)", jsonBlock({ before: run.before, after: run.after }), "snapshots"));
   }
   body.querySelectorAll("details[data-key]").forEach(entry => { entry.open = opened.has(entry.dataset.key); });
@@ -360,12 +368,23 @@ function renderRun() {
   setNotice("run-error", run.error ? `This run failed: ${valueText(run.error)}\nAny earlier saved changes may still be present. Inspect the outcome and timeline.` : null);
   const requests = events.filter(event => event.type === "llm_request");
   const responses = events.filter(event => event.type === "llm_response");
+  const legacyStages = [...new Set([...requests, ...responses].map(event => normalizeStage(event.stage)))].filter(id => knownStages.some(stage => stage.id === id && id !== "meetingFollowThrough"));
+  const guide = $("workflow-explanation");
+  guide.replaceChildren();
+  if (legacyStages.length) {
+    guide.append(node("p", "notice info", "This saved run used the earlier application, which split work into separate model stages. Its original prompts, stage names and tool results are preserved. The current application uses one agent conversation; it does not rewrite this history."));
+    const list = node("ul", "guide-stages");
+    for (const id of legacyStages) { const stage = knownStages.find(entry => entry.id === id); const item = node("li"); item.append(node("strong", "", `${stage.title}. `), document.createTextNode(stage.description)); list.append(item); }
+    guide.append(list);
+  } else {
+    guide.append(node("p", "", "The current app has one agent, one system prompt and one goal. It reads the meeting, uses the available CRM tools in an order it chooses, and keeps the results in one shared conversation. It can make zero or several updates and tasks; there is no required sequence of analysis stages."));
+  }
   const missingRequests = requests.filter(event => !event.data?.request).length;
   const missingResponses = responses.filter(event => !event.data?.response).length;
   setNotice("recording-notice", missingRequests || missingResponses ? `This run has incomplete historical recording: ${missingRequests} exact ${missingRequests === 1 ? "prompt" : "prompts"} and ${missingResponses} exact ${missingResponses === 1 ? "response" : "responses"} were not saved. The timeline and tool results remain available. Missing content is not reconstructed; new runs record full exchanges.` : !requests.length && !context ? "This run predates full exchange recording. Any unavailable prompts or model responses are explicitly marked below." : null);
   const calls = requests.length, tools = events.filter(event => event.type === "tool_call").length, writes = events.filter(event => event.type === "mutation").length;
   const elapsed = run.finishedAt ? duration(new Date(run.finishedAt) - new Date(run.startedAt)) : activeRun(run) ? "In progress" : "Unavailable";
-  $("run-stats").replaceChildren(...[[calls, run.mode === "offline" ? "Fixture model exchanges" : "Model requests"], [tools, "Tool calls, including nested"], [writes, "Saved database changes"], [elapsed, "Run duration"]].map(([value, label]) => { const block = node("div", "stat"); block.append(node("strong", "", value), node("span", "", label)); return block; }));
+  $("run-stats").replaceChildren(...[[calls, run.mode === "offline" ? "Fixture model exchanges" : "Model requests"], [tools, "Tool calls"], [writes, "Saved database changes"], [elapsed, "Run duration"]].map(([value, label]) => { const block = node("div", "stat"); block.append(node("strong", "", value), node("span", "", label)); return block; }));
   state.items = makeItems(events);
   renderOutcome(); renderStages(); renderSteps(); renderDetail();
   $("connection-status").textContent = activeRun(run) ? "Following this run live · Updates every 2.5 seconds" : "Saved run · Refresh to fetch newer runs";

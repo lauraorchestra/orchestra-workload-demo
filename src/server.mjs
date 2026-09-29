@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { openAppStore, StoreError } from './store.mjs';
 import { readConfig, publicConfig } from './config.mjs';
 import { runMeeting } from './runner.mjs';
+import { crmAgent } from './agent.mjs';
 
 const store = openAppStore({ path: process.env.CRM_DB_PATH });
 const config = readConfig();
@@ -51,7 +52,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'" });
       return res.end(await readFile(fileURLToPath(new URL(`../public/${file}`, import.meta.url))));
     }
-    if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, { ...store.overview(), runs: store.listRuns(), config: publicConfig(config), activeRun });
+    if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, { ...store.overview(), runs: store.listRuns(), config: publicConfig(config), agent: crmAgent, activeRun });
     if (req.method === 'GET' && url.pathname === '/api/runs') {
       const limit = Number(url.searchParams.get('limit') ?? 50);
       const offset = Number(url.searchParams.get('offset') ?? 0);

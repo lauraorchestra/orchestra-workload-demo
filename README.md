@@ -1,9 +1,14 @@
 # CRM meeting follow-through lab
 
 A local CRM application with wholly invented accounts, contacts, deals, meeting
-notes, timelines and follow-up tasks. The agent searches and reads real SQLite
-records, updates the selected deal with version/evidence checks, and creates a
-local follow-up task. It never sends email or writes to an external CRM.
+notes, timelines and follow-up tasks. One agent receives a goal, the meeting,
+one system prompt, and CRM tools. It chooses what to read, which supported changes
+to make, and when to finish. It can update several deals, create several tasks,
+leave already-correct records alone, or explain what needs clarification. It never
+sends email or writes to an external CRM.
+
+The model is GPT-4o when running directly with OpenAI. There is no separate
+extraction agent, deal-assessment agent, or drafting agent.
 
 Requires Node.js 24 or newer. Install locked dependencies with `npm ci`, then
 `npm start` and open http://127.0.0.1:4317. The initial mode is **offline fixture**:
@@ -11,7 +16,7 @@ fixed model replies travel through the real OpenAI SDK, runner and database tool
 This makes the application usable without credentials but does not prove model
 quality or gateway integration.
 
-`npm run run:offline` runs the same workflow in the terminal. `npm run reset`
+`npm run run:offline` runs the fixture transport in the terminal. `npm run reset`
 restores the invented records. The UI displays each tool call and database changes.
 `npm test` checks persisted outcomes, mutation validation and failure behavior.
 
@@ -19,8 +24,16 @@ restores the invented records. The UI displays each tool call and database chang
 
 Open **Run explorer** from the sidebar, or visit `/debug`. Select a run to see
 its final response, database changes, and a chronological record of model calls,
-tool executions, errors, and writes. The four stage descriptions explain what
-the application asks the model to do and how those pieces fit together.
+tool executions, errors, and writes. New runs show one **Meeting follow-through**
+conversation: the model asks for tools, the application executes them, and their
+results are returned to the same conversation. Older saved runs retain their
+original four-stage history.
+
+The main page also shows the exact current goal and system prompt under **Agent
+instructions**. A completed run means the model returned a final response and
+the application confirmed its successful writes are still present. It does not
+mean an independent evaluator has judged the model's decisions correct. Compare
+the meeting, tool results, summary, and actual database changes yourself.
 
 For newly recorded runs, select a model call to read its full system/user prompt,
 earlier conversation messages, available tool definitions, request settings, and
@@ -79,8 +92,8 @@ fails closed. Gateway mode never falls back to a native-provider key.
 `npm run run:gateway` executes one bounded real-model run in the terminal using
 the same private configuration. Both providers cap each run at 16 model requests and 40
 tools by default, with a 2,400-token output limit per request and SDK retries disabled. `CRM_MAX_MODEL_CALLS` can lower this
-budget (maximum 20). Live requests are billable. All four model tasks must run,
-and both local writes must succeed, before the workflow reports completion.
+budget (maximum 20). Live requests are billable. The model controls the tool
+sequence; there is no required number of writes or required analysis subroutine.
 The audit retains attempted/returned requests, provider request IDs, model
 receipts and errors. Gateway runs additionally record workload, trace, environment
 and route receipts. Direct OpenAI runs have no Orchestra request logs or workloads
@@ -89,10 +102,40 @@ Management IDs are used when checking exact request logs through the CLI;
 inference headers use the project slug and workload name. Verify both against
 the actual indexed request before accepting attribution.
 
-Source separates database tools (`src/store.mjs`), model transport
-(`src/model.mjs`), agent workflow (`src/runner.mjs`), and UI/server. Workflow stages
-are ordinary application functions; connecting them to gateway workloads is an
-integration step. SDK/base URL changes should preserve these boundaries.
+## Where the agent lives
+
+| File | Responsibility |
+| --- | --- |
+| `src/agent.mjs` | The agent's name, goal, and single readable system prompt. Start here. |
+| `src/runner.mjs` | Starts its conversation, executes chosen tools, returns results, and stops on a final answer or a budget/error. |
+| `src/store.mjs` | SQLite tools and validation: account boundary, evidence IDs, field types, current versions, dated changes, duplicate tasks, and no-op updates. |
+| `src/model.mjs` | OpenAI SDK requests, provider configuration, request limits, and exact prompt/response capture. |
+| `src/seed.mjs` | Invented CRM records and meeting scenarios. |
+| `src/server.mjs`, `public/` | Local HTTP API, CRM page, and run explorer. |
+| `src/fixture-model.mjs` | Fixed offline replies for exercising transport and storage without a model. |
+
+The loop is ordinary JavaScript rather than an agent framework: send messages
+and tool definitions to the model, append its reply, execute its requested tools,
+append their results, and repeat. Tools are ordinary database functions, not
+additional agents. This gives the model control over its approach while the
+application retains control of permissions, input validation, and budgets.
+
+There are nine tools: `search_accounts`, `get_account`, `list_deals`, `get_deal`,
+`get_timeline`, `list_tasks`, `get_field_definitions`, `update_deal`, and
+`create_follow_up_task`. Task reads let the agent recognize work that is already
+recorded. Exact unchanged deal updates do not increase the version. The database
+blocks exact task duplicates; recognizing differently worded duplicates remains
+part of the agent's judgment.
+
+The timeline includes changes saved by earlier runs, including partial writes
+from failed runs. An older meeting cannot overwrite a field already changed by
+a newer meeting. Unchanged fields and unrelated field backfills remain allowed.
+
+The current agent has one inference boundary, `meetingFollowThrough`. Gateway
+integration maps it to one workload; individual tool calls are not separate model
+workloads. Existing private gateway configurations from the old four-stage app
+need an explicit `workloads.meetingFollowThrough` mapping before gateway runs.
+Direct OpenAI mode is unaffected.
 
 Runtime data and evidence live in ignored, private `.understudy/`, including
 SQLite snapshots, run events and any gateway verification receipts. No credentials
@@ -113,10 +156,15 @@ while the runner is idle. This restores only the disposable local CRM and clears
 its run history. CI runs offline tests on Node 24 and 26; it never calls a model
 or needs credentials.
 
-The four model tasks are `extractMeetingFacts`, `reconcileDeal`,
-`assessDealReadiness`, and `draftFollowUp`. The coordinator can call the latter
-two as model-backed tools. The eight SQLite tools perform deterministic reads
-and writes; they are not separate inference workloads.
+Choose a natural meeting from the UI: a discussion covering two opportunities,
+an ambiguous request, or an account that is already up to date. New examples are
+added to existing databases without resetting records or run history. These are
+independent scenarios, not a chronology to replay in order; running an older
+meeting against later records requires judgment about stale evidence.
+
+The original scripted meeting remains available for the deterministic offline
+write exercise. Offline replies for the natural scenarios only inspect records
+and return an explicit fixture notice; use a real model to judge those scenarios.
 
 ## Recover an interrupted run
 
@@ -147,15 +195,12 @@ understudy projects list
 ```
 
 Reuse an existing project/workload set when appropriate. For a new test project,
-the following example creates four workloads with capture disabled. The names
+the following example creates one workload with capture disabled. The names
 are illustrative and must match your private runtime configuration.
 
 ```sh
 understudy projects create crm-test-lab --name "Synthetic CRM Test Lab"
-understudy workloads create extract-meeting-facts --project crm-test-lab --no-capture
-understudy workloads create reconcile-deal --project crm-test-lab --no-capture
-understudy workloads create assess-deal-readiness --project crm-test-lab --no-capture
-understudy workloads create draft-follow-up --project crm-test-lab --no-capture
+understudy workloads create meeting-follow-through --project crm-test-lab --no-capture
 understudy keys create --name "local-crm-test"
 ```
 

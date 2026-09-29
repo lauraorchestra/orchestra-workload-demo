@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readConfig } from '../src/config.mjs';
 import { createModel } from '../src/model.mjs';
-const stages = ['extractMeetingFacts', 'reconcileDeal', 'assessDealReadiness', 'draftFollowUp'];
+const stages = ['meetingFollowThrough'];
 function setup(t) {
   const dir = mkdtempSync(join(tmpdir(), 'invented-gateway-config-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -27,7 +27,7 @@ test('gateway configuration derives SDK prefix and never falls back to native cr
   assert.equal(readConfig({CRM_ALLOW_LIVE:'1', OPENAI_API_KEY:'synthetic-native-key'}).liveReady, false);
   assert.equal(readConfig({...env, CRM_PROVIDER:'understudy', OPENAI_API_KEY:'synthetic-native-key', OPENAI_BASE_URL:'https://other.example.invalid'}).apiKey, env.UNDERSTUDY_API_KEY);
 });
-test('actual SDK preserves protocol/model and concurrent stage attribution with exact receipts', async t => {
+test('actual SDK preserves protocol/model and single-agent workload attribution with exact receipts', async t => {
   const {env, gateway} = setup(t);
   const requests = [], events = [];
   const complete = createModel({ mode: 'live', config: readConfig(env), onEvent: e => events.push(e), fetch: async (input, init) => {
@@ -37,7 +37,7 @@ test('actual SDK preserves protocol/model and concurrent stage attribution with 
     return new Response(JSON.stringify({id:'synthetic-completion',object:'chat.completion',created:1,model:'synthetic-response-model',choices:[{index:0,finish_reason:'stop',message:{role:'assistant',content:'{"ok":true}'}}]}), {headers:{'content-type':'application/json','x-understudy-request-id':`synthetic-${req.headers.get('x-lab-stage')}`,'x-understudy-environment':'test','x-understudy-effective-model':body.model,'x-understudy-route':'managed'}});
   }});
   await Promise.all(stages.map(s => complete(s,[{role:'user',content:'Synthetic transport exercise.'}],{json:true})));
-  assert.equal(requests.length,4);
+  assert.equal(requests.length,1);
   const traces = new Set();
   for (const req of requests) {
     const stage = req.headers.get('x-lab-stage');
@@ -51,17 +51,17 @@ test('actual SDK preserves protocol/model and concurrent stage attribution with 
     const trace = req.headers.get('traceparent'); assert.match(trace,/^00-[a-f0-9]{32}-[a-f0-9]{16}-01$/); traces.add(trace.split('-')[1]);
   }
   assert.equal(traces.size,1);
-  assert.equal(events.filter(e=>e.type==='llm_response').length,4);
+  assert.equal(events.filter(e=>e.type==='llm_response').length,1);
   for (const request of events.filter(e=>e.type==='llm_request')) assert.equal(events.find(e=>e.type==='llm_response' && e.stage===request.stage).data.callIndex, request.data.callIndex);
   assert.ok(events.filter(e=>e.type==='llm_response').every(e=>e.data.requestId===`synthetic-${e.stage}` && e.data.environment==='test'));
   assert.ok(events.filter(e=>e.type==='llm_response').every(e=>e.data.effectiveModel==='gpt-4.1-mini'));
   await assert.rejects(complete('unmappedStage',[]),/No workload mapping/);
-  assert.equal(requests.length,4);
+  assert.equal(requests.length,1);
 });
 test('missing gateway environment acknowledgment fails without automatic inference retry', async t => {
   const {env} = setup(t); let calls=0;
   const complete = createModel({mode:'live',config:readConfig(env),onEvent:()=>{},fetch:async()=>{calls++;return new Response(JSON.stringify({choices:[{finish_reason:'stop',message:{role:'assistant',content:'OK'}}]}),{headers:{'content-type':'application/json','x-understudy-request-id':'synthetic-existing-id'}});}});
-  await assert.rejects(complete('extractMeetingFacts',[{role:'user',content:'Synthetic.'}]),error => /not confirmed/.test(error.message) && error.fatalModelError === true);
+  await assert.rejects(complete('meetingFollowThrough',[{role:'user',content:'Synthetic.'}]),error => /not confirmed/.test(error.message) && error.fatalModelError === true);
   assert.equal(calls,1);
 });
 test('truncated output stops with its receipt and HTTP errors retain safe request metadata', async t => {
@@ -71,9 +71,9 @@ test('truncated output stops with its receipt and HTTP errors retain safe reques
     if(calls===1) return new Response(JSON.stringify({choices:[{finish_reason:'length',message:{role:'assistant',content:'{"partial":'}}]}),{headers:{'content-type':'application/json','x-understudy-request-id':'synthetic-truncated','x-understudy-environment':'test'}});
     return new Response(JSON.stringify({error:{message:'Synthetic body must stay out of logs',code:'synthetic_failure'}}),{status:400,headers:{'content-type':'application/json','x-understudy-request-id':'synthetic-rejected','x-understudy-environment':'test'}});
   }});
-  await assert.rejects(complete('extractMeetingFacts',[]),/2400-token limit/);
+  await assert.rejects(complete('meetingFollowThrough',[]),/2400-token limit/);
   assert.equal(events.find(e=>e.type==='llm_response').data.requestId,'synthetic-truncated');
-  await assert.rejects(complete('extractMeetingFacts',[]),/HTTP 400/);
+  await assert.rejects(complete('meetingFollowThrough',[]),/HTTP 400/);
   assert.equal(events.at(-1).data.requestId,'synthetic-rejected');
   assert.equal(events.at(-1).data.environment,'test');
   assert.equal(calls,2);

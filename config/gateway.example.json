@@ -4,10 +4,7 @@
   "project": "crm-test-lab",
   "environment": "test",
   "workloads": {
-    "extractMeetingFacts": "extract-meeting-facts",
-    "reconcileDeal": "reconcile-deal",
-    "assessDealReadiness": "assess-deal-readiness",
-    "draftFollowUp": "draft-follow-up"
+    "meetingFollowThrough": "meeting-follow-through"
   },
   "credentialReference": "replace-with-private-credential-reference-from-cli"
 }

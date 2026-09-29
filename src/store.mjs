@@ -37,9 +37,10 @@ export const toolDefinitions = [
   definition('get_account', 'Read account details and its existing contacts to verify identity and select an evidence-supported contact.', { accountId: stringSchema }),
   definition('list_deals', 'List all opportunities for an account. Identify the deal actually discussed and preserve unrelated opportunities.', { accountId: stringSchema }),
   definition('get_deal', 'Read an opportunity and its current optimistic version immediately before updating. Values must be reconciled with the current meeting and dated timeline.', { dealId: stringSchema }),
-  definition('get_timeline', 'Read dated historical account records with source IDs. Historical proposals and tentative plans can be superseded by the current meeting; preserve history and do not invent facts.', { accountId: stringSchema }),
+  definition('list_tasks', 'Read all existing follow-up tasks for an opportunity, including their status, due date, body, and source evidence. Check for equivalent open or completed work before creating another task.', { dealId: stringSchema }),
+  definition('get_timeline', 'Read dated historical account records with source IDs and prior applied deal changes. A later meeting may already have superseded the current meeting. Applied changes provide context only; their meeting/run IDs are not new valid evidence IDs. Preserve newer decisions and do not invent facts.', { accountId: stringSchema }),
   definition('get_field_definitions', 'Read valid fields, data types, stages, and write rules before constructing CRM updates.', {}),
-  definition('update_deal', 'Update supported current opportunity fields using source evidence and the version returned by get_deal. Retrieve account, deal, field and historical context first. Only agreed facts belong in changes; the active meeting account is the write boundary. This changes only the local SQLite CRM.', {
+  definition('update_deal', 'Update supported current opportunity fields using source evidence and the version returned by get_deal. Retrieve account, deal, field and historical context first. Only agreed facts belong in changes; the active meeting account is the write boundary. Unchanged values leave the deal and its version untouched. This changes only the local SQLite CRM.', {
     dealId: stringSchema, expectedVersion: { type: 'integer', minimum: 1 }, changes: { type: 'object', minProperties: 1, properties: changeProperties, additionalProperties: false }, evidence: evidenceSchema,
   }),
   definition('create_follow_up_task', 'Create one explicitly agreed local follow-up task on the relevant deal using supporting source IDs. Resolve calendar dates from the meeting; never invent a deadline, send a message, or schedule an external event.', {
@@ -149,6 +150,12 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
     db.prepare("INSERT OR REPLACE INTO metadata (key,value) VALUES ('seed_version','1')").run();
   }
   if (!db.prepare("SELECT value FROM metadata WHERE key = 'seed_version'").get()) transaction(insertSeeds);
+  // Add newly shipped examples without rewriting an existing meeting or its run history.
+  transaction(() => {
+    const insert = db.prepare('INSERT OR IGNORE INTO meetings (id,account_id,body) VALUES (?,?,?)');
+    for (const meeting of seed.meetings) insert.run(meeting.id, meeting.accountId, JSON.stringify(meeting));
+  });
+  const meetingOrder = new Map(seed.meetings.map((meeting, index) => [meeting.id, index]));
   function runRow(runId) { id(runId, 'runId'); const row = db.prepare('SELECT * FROM runs WHERE id = ?').get(runId); if (!row) fail('NOT_FOUND', 'runId was not found.'); return row; }
   function getRun(runId) {
     const row = runRow(runId);
@@ -156,6 +163,20 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
     return { id: row.id, meetingId: row.meeting_id, mode: row.mode, status: row.status, startedAt: row.started_at, finishedAt: row.finished_at, before: JSON.parse(row.before_json), after: row.after_json ? JSON.parse(row.after_json) : null, events, summary: row.summary, error: row.error_json ? JSON.parse(row.error_json) : null };
   }
   function activeRun(runId) { const row = runRow(runId); if (row.status !== 'running') fail('RUN_FINISHED', 'The run has finished; no further tool mutations are allowed.'); return row; }
+  function appliedDealChanges(accountId) {
+    return db.prepare(`SELECT events.data, events.at, runs.id AS run_id, runs.status, runs.mode, meetings.body AS meeting_body
+      FROM events JOIN runs ON runs.id = events.run_id JOIN meetings ON meetings.id = runs.meeting_id
+      WHERE events.type = 'mutation' AND meetings.account_id = ? ORDER BY events.sequence`).all(accountId).flatMap(row => {
+      const mutation = JSON.parse(row.data);
+      if (mutation.tool !== 'update_deal' || mutation.entityType !== 'deal' || !mutation.before || !mutation.after) return [];
+      const changes = Object.fromEntries(mutableFields.filter(field => mutation.before[field] !== mutation.after[field])
+        .map(field => [field, { before: mutation.before[field], after: mutation.after[field] }]));
+      if (!Object.keys(changes).length) return [];
+      const meeting = JSON.parse(row.meeting_body);
+      return [{ meetingId: meeting.id, meetingTitle: meeting.title, meetingOccurredAt: meeting.occurredAt,
+        dealId: mutation.entityId, changes, appliedAt: row.at, runId: row.run_id, runStatus: row.status, mode: row.mode }];
+    });
+  }
   function appendEvent(runId, event) {
     activeRun(runId);
     object(event, ['type', 'stage', 'data']);
@@ -177,13 +198,20 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
       const source = db.prepare('SELECT account_id FROM timeline WHERE id = ?').get(sourceId);
       if (!source || source.account_id !== meeting.accountId) fail('INVALID_EVIDENCE', 'Evidence must reference the current meeting or a timeline item belonging to its account.');
     }
+    return meeting;
   }
   const handlers = {
     search_accounts(args) { object(args, ['query']); string(args.query, 'query'); const query = args.query.trim().toLowerCase(); return { accounts: all('accounts').filter((account) => `${account.name} ${account.domain}`.toLowerCase().includes(query)) }; },
     get_account(args) { object(args, ['accountId']); const account = lookup('accounts', args.accountId, 'accountId'); return { ...account, contacts: all('contacts').filter((contact) => contact.accountId === account.id) }; },
     list_deals(args) { object(args, ['accountId']); lookup('accounts', args.accountId, 'accountId'); return { deals: all('deals').filter((deal) => deal.accountId === args.accountId) }; },
     get_deal(args) { object(args, ['dealId']); return lookup('deals', args.dealId, 'dealId'); },
-    get_timeline(args) { object(args, ['accountId']); lookup('accounts', args.accountId, 'accountId'); return { timeline: all('timeline').filter((item) => item.accountId === args.accountId).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)) }; },
+    list_tasks(args) { object(args, ['dealId']); lookup('deals', args.dealId, 'dealId'); return { tasks: all('tasks').filter((task) => task.dealId === args.dealId) }; },
+    get_timeline(args) {
+      object(args, ['accountId']); lookup('accounts', args.accountId, 'accountId');
+      return { timeline: all('timeline').filter((item) => item.accountId === args.accountId).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt)),
+        appliedChanges: appliedDealChanges(args.accountId),
+        appliedChangesNotice: 'These are saved deal changes, including partial writes from failed runs. Use their dates to preserve newer decisions. Their meeting/run IDs are context, not new valid write evidence IDs.' };
+    },
     get_field_definitions(args) { object(args, []); return { fieldDefinitions: clone(fieldDefinitions) }; },
     update_deal(args, context) {
       object(args, ['dealId', 'expectedVersion', 'changes', 'evidence']);
@@ -192,7 +220,7 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
       if (!Object.keys(args.changes).length) fail('INVALID_ARGUMENT', 'changes must contain at least one writable field.');
       return transaction(() => {
         const before = lookup('deals', args.dealId, 'dealId');
-        scope(context.runId, before, args.evidence);
+        const meeting = scope(context.runId, before, args.evidence);
         for (const [field, value] of Object.entries(args.changes)) {
           if (field === 'stage' && !stages.includes(value)) fail('INVALID_ARGUMENT', 'stage is not a supported sales stage.');
           if (field === 'amount') integer(value, 'amount', 0, 1000000000);
@@ -205,6 +233,12 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
           }
         }
         if (before.version !== args.expectedVersion) fail('VERSION_CONFLICT', 'The deal changed since it was read. Read the current deal version before retrying.');
+        if (Object.entries(args.changes).every(([field, value]) => before[field] === value)) return before;
+        for (const applied of appliedDealChanges(before.accountId)) {
+          if (applied.dealId !== before.id || !(Date.parse(applied.meetingOccurredAt) > Date.parse(meeting.occurredAt))) continue;
+          const staleFields = Object.keys(args.changes).filter(field => args.changes[field] !== before[field] && Object.hasOwn(applied.changes, field));
+          if (staleFields.length) fail('STALE_MEETING', `A later meeting (${applied.meetingOccurredAt}) already changed ${staleFields.join(', ')} on this deal. Keep the current values and use get_timeline to review newer decisions; request clarification rather than restoring older values.`);
+        }
         const after = { ...before, ...args.changes, version: before.version + 1 };
         const result = db.prepare('UPDATE deals SET body = ?, version = ? WHERE id = ? AND version = ?').run(JSON.stringify(after), after.version, before.id, args.expectedVersion);
         if (result.changes !== 1) fail('VERSION_CONFLICT', 'The deal changed since it was read. Read the current deal version before retrying.');
@@ -232,7 +266,7 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
     },
   };
   return {
-    overview() { return { ...snapshot(), meetings: all('meetings'), fieldDefinitions: clone(fieldDefinitions) }; },
+    overview() { return { ...snapshot(), meetings: all('meetings').sort((a, b) => (meetingOrder.get(a.id) ?? Infinity) - (meetingOrder.get(b.id) ?? Infinity)), fieldDefinitions: clone(fieldDefinitions) }; },
     getMeeting(meetingId) { return lookup('meetings', meetingId, 'meetingId'); },
     snapshot,
     createRun(args) {

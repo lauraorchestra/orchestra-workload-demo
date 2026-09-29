@@ -25,10 +25,10 @@ test('offline SDK fixture executes real database tools and persists scoped outco
   for (const [key, value] of Object.entries(scenarioExpectations.expectedTask)) assert.equal(task[key], value, key);
   for (const id of scenarioExpectations.preservedDealIds) assert.deepEqual(after.deals.find(d => d.id === id), before.deals.find(d => d.id === id));
   const responses = run.events.filter(e => e.type === 'llm_response');
-  assert.equal(responses.length, 14);
-  assert.deepEqual(new Set(responses.map(e => e.stage)), new Set(['extractMeetingFacts', 'reconcileDeal', 'assessDealReadiness', 'draftFollowUp']));
+  assert.equal(responses.length, 10);
+  assert.deepEqual(new Set(responses.map(e => e.stage)), new Set(['meetingFollowThrough']));
   assert.ok(responses.every(e => e.data.synthetic === true));
-  assert.ok(run.events.filter(e => e.type === 'tool_call').length >= 10);
+  assert.ok(run.events.filter(e => e.type === 'tool_call').length === 9);
   assert.ok(run.events.some(e => e.type === 'mutation'));
 });
 test('model budget exhaustion leaves actual CRM data unchanged and run failed', async t => {

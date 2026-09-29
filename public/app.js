@@ -36,7 +36,7 @@ function errorMessage(error) { return typeof error === "string" ? error : error?
 function setError(id, value) { const node = $(id); node.textContent = value ? errorMessage(value) : ""; node.hidden = !value; }
 function statusPill(status) {
   const safeStatus = ["running", "pending", "completed", "success", "succeeded", "failed", "error", "cancelled"].includes(status) ? status : "idle";
-  return element("span", `status-pill status-${safeStatus}`, titleCase(status || "Ready"));
+  return element("span", `status-pill status-${safeStatus}`, status === "succeeded" ? "Completed" : titleCase(status || "Ready"));
 }
 
 async function api(path, options = {}) {
@@ -159,13 +159,15 @@ function budgetLabel(config) {
 
 function renderControls() {
   const config = state.data?.config || {};
+  $("agent-goal").textContent = state.data?.agent?.goal || "Current agent goal is unavailable. Saved runs retain the exact request in Run explorer.";
+  $("agent-system-prompt").textContent = state.data?.agent?.systemPrompt || "Current system prompt is unavailable. Saved runs retain the exact request in Run explorer.";
   const active = state.run && !terminal(state.run.status);
   state.busy = Boolean(active || state.loadingRunId);
   document.querySelectorAll('input[name="mode"]').forEach((input) => { input.checked = input.value === state.mode; input.disabled = state.busy; });
   $("model-value").textContent = state.mode === "offline" ? "Fixture responses · no LLM requests" : config.model || "No model configured";
   $("budget-value").textContent = state.mode === "offline" ? "0 live model calls" : budgetLabel(config);
   $("live-readiness").textContent = config.liveReady ? `Live configuration is ready. Configured model: ${config.model || "unspecified"}. ${config.provider === "openai" ? "Requests go directly to OpenAI." : "Requests use the configured Orchestra gateway."}` : "Real-model mode is unavailable until the local server has verified live configuration.";
-  $("mode-explanation").textContent = state.mode === "offline" ? "Offline mode exercises the tool workflow using fixture responses. It does not prove live model behavior." : "Real-model mode makes bounded inference requests. Tools update only this synthetic local CRM; every call is journaled.";
+  $("mode-explanation").textContent = state.mode === "offline" ? "Offline mode exercises transport using fixture responses. It does not prove live model behavior." : "The model chooses its next step using one shared conversation. Tools validate local writes; a completed run is not a correctness score. Every request and tool result is journaled.";
   $("run-button").disabled = !state.data || !state.meetingId || accountForMeeting(getMeeting())?.id !== state.accountId || state.busy || (state.mode === "live" && !config.liveReady);
   $("run-button-label").textContent = state.busy ? "Follow-through is running…" : state.mode === "live" ? "Run with real model" : "Run fixture follow-through";
   $("reset-button").disabled = state.busy || !state.data;
@@ -241,6 +243,7 @@ function renderOutcome() {
   const summary = typeof run.summary === "string" ? run.summary : run.summary?.message || run.summary?.summary || run.summary?.text || "";
   $("run-summary").textContent = summary;
   $("run-summary").hidden = !summary;
+  $("outcome-explanation").textContent = run.status === "succeeded" ? "Completed means the agent loop ended. Review its response and the saved changes; no change or a request for clarification can be a valid outcome." : "The run stopped before completing. Earlier local writes can still be present; inspect the recorded changes and error.";
   if (!run.before || !run.after) {
     $("deal-changes").replaceChildren();
     $("created-tasks").replaceChildren();
@@ -285,7 +288,7 @@ function renderOutcome() {
     group.append(grid); $("created-tasks").append(group);
   }
   $("no-changes").hidden = totalChanges > 0 || tasks.length > 0;
-  $("no-changes").textContent = "No deal field changes or new tasks were recorded in this run.";
+  $("no-changes").textContent = "No deal field changes or new tasks were recorded. Read the response to understand whether no action was needed, clarification was required, or the agent could not finish.";
 }
 
 function renderHistory() {

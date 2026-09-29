@@ -32,15 +32,11 @@
         <details class="how-it-works card" id="how-it-works">
           <summary>New to this app? Here is how it works.</summary>
           <div class="guide-content">
-            <p>A salesperson has meeting notes and an outdated CRM. This agent reads the notes, finds the right deal, updates it, and creates a local follow-up task. All companies, people, and notes in this lab are invented.</p>
-            <ol class="guide-stages">
-              <li><strong>Extract meeting facts.</strong> One model request turns the notes into facts and uncertainties.</li>
-              <li><strong>Reconcile the deal.</strong> The main agent asks for CRM tools, reads their results, and decides what to do next. This conversation usually takes several model requests.</li>
-              <li><strong>Assess deal readiness.</strong> A separate model request checks the sales stage against the meeting, deal, and history before a deal update is saved.</li>
-              <li><strong>Draft a follow-up.</strong> A separate model request writes a task. The main agent then asks a tool to save that task in the CRM.</li>
-            </ol>
-            <p>These are <strong>four types of work, not four consecutive messages</strong>. Assessment and drafting happen inside the main agent’s tool loop. A model request sends the conversation so far; a model response may contain text, tool requests, or both. The application executes those tools and returns their results in the next model request.</p>
-            <div class="guide-key"><p><strong>Model call</strong><br>The AI reads messages and produces a response.</p><p><strong>Tool call</strong><br>The application reads CRM records, invokes an analysis step, or writes a change.</p><p><strong>Database change</strong><br>An actual local write, shown separately from what the model proposed.</p></div>
+            <p>A salesperson has meeting notes and CRM records. The agent decides what follow-through is justified: update relevant deals, create missing tasks, leave records unchanged, or explain what needs clarification. All companies, people, and notes in this lab are invented.</p>
+            <div id="workflow-explanation"></div>
+            <p>A model request sends the conversation so far. The response may contain text, requested tools, or both. The application validates and executes those tools, adds their results to the conversation, and asks the model what to do next. The exact messages and available tool definitions are visible in each model call below.</p>
+            <div class="guide-key"><p><strong>Model call</strong><br>The AI reads messages and chooses a response or tool requests.</p><p><strong>Tool call</strong><br>The application reads CRM records or validates and writes a change.</p><p><strong>Database change</strong><br>An actual local write, shown separately from what the model proposed.</p></div>
+            <p><strong>Completed means the agent loop ended.</strong> It is not an evaluation score or a guarantee that the model was correct. No changes or a request for clarification can be a valid result. Review the response, evidence and saved changes to judge the outcome.</p>
             <p>No email is sent and no external CRM is modified. Failed runs can still have saved changes; the before/after snapshots show what actually happened. Offline runs use fixture responses and are not evidence of real model behavior.</p>
           </div>
         </details>
@@ -50,13 +46,13 @@
           <div id="outcome-content" class="overview-content"></div>
         </details>
         <section class="stages-section" aria-labelledby="stages-title">
-          <div class="section-heading"><div><h3 id="stages-title">Follow the work</h3><p class="muted">Choose a stage to filter the steps below.</p></div><button id="all-stages" class="button active" type="button" aria-pressed="true">All stages</button></div>
+          <div class="section-heading"><div><h3 id="stages-title">Follow the conversation</h3><p class="muted">Only model stages recorded in this run appear here. Select one to filter the timeline.</p></div><button id="all-stages" class="button active" type="button" aria-pressed="true">All steps</button></div>
           <div id="stage-list" class="stage-list"></div>
         </section>
         <div class="inspection-grid">
           <section class="steps-card card" aria-labelledby="steps-title">
             <div class="steps-heading"><h3 id="steps-title">Interaction timeline</h3><span id="step-count" class="muted small"></span></div>
-            <p class="timeline-note">Ordered by when each step started. Tool calls can contain other steps; their results may arrive later.</p>
+            <p class="timeline-note">Ordered by when each step started. Database changes saved during a tool call appear as separate events.</p>
             <div id="step-list" class="step-list"></div>
           </section>
           <section id="step-detail" class="detail-card card" aria-label="Selected step details"></section>
