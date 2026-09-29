@@ -57,7 +57,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     // A previous tool may have already committed before the interrupted model call.
     store.executeTool('update_deal', {
       dealId: expected.dealId, expectedVersion: 1,
-      changes: { amount: expected.expectedChanges.amount }, evidence: [expected.meetingId],
+      changes: { amount: expected.expectedChanges.amount }, evidence: [run.meetingId],
     }, { runId: run.id });
     assert.equal(child.kill(signal), true);
     const [code, terminatingSignal] = await exited;

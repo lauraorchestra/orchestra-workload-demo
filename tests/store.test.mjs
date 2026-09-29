@@ -28,7 +28,7 @@ test('synthetic account discovery includes similar names and dated conflicting c
   assert.ok(timeline.some((item) => item.body.includes('$52,000')));
   assert.ok(store.getMeeting(expected.meetingId).note.includes('$48,000'));
   assert.equal(store.overview().deals.length, 4);
-  assert.equal(toolDefinitions.length, 8);
+  assert.equal(toolDefinitions.length, 9);
 });
 
 test('accepted mutations persist with atomic audits and before/after run snapshots', (t) => {
