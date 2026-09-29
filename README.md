@@ -36,7 +36,8 @@ defaults to offline fixtures, so having a shell key alone does not enable live
 traffic. Stop the server before switching between direct and gateway modes.
 
 For a fresh baseline while preserving an earlier database and its history, choose
-a separate private path:
+a separate private path inside `.understudy` (paths outside it and symbolic links
+are rejected):
 
 ```sh
 CRM_DB_PATH=.understudy/openai-baseline/crm.sqlite npm run start:openai
