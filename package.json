@@ -15,7 +15,9 @@
     "reset": "node src/run.mjs --reset",
     "recover": "node src/run.mjs --recover",
     "start:gateway": "node scripts/gateway.mjs serve",
-    "run:gateway": "node scripts/gateway.mjs run"
+    "run:gateway": "node scripts/gateway.mjs run",
+    "start:openai": "node scripts/openai.mjs serve",
+    "run:openai": "node scripts/openai.mjs run"
   },
   "dependencies": {
     "openai": "7.23.0"

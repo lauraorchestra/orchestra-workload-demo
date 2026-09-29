@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 
 export function readConfig(env = process.env) {
-  const model = env.CRM_MODEL || 'gpt-4.1-mini';
+  const provider = env.CRM_PROVIDER || 'understudy';
+  if (!['openai', 'understudy'].includes(provider)) throw new Error('CRM_PROVIDER must be openai or understudy.');
+  const model = env.CRM_MODEL || (provider === 'openai' ? 'gpt-4o' : 'gpt-4.1-mini');
   const mode = env.CRM_MODE || 'offline';
   if (!['offline', 'live'].includes(mode)) throw new Error('CRM_MODE must be offline or live.');
   const maxModelCalls = Number(env.CRM_MAX_MODEL_CALLS || 16);
@@ -9,7 +11,10 @@ export function readConfig(env = process.env) {
   let baseURL;
   let apiKey;
   let gateway = null;
-  if (env.CRM_GATEWAY_CONFIG) {
+  if (provider === 'openai') {
+    apiKey = env.OPENAI_API_KEY;
+    baseURL = 'https://api.openai.com/v1';
+  } else if (env.CRM_GATEWAY_CONFIG) {
     gateway = JSON.parse(readFileSync(env.CRM_GATEWAY_CONFIG, 'utf8'));
     if (!env.UNDERSTUDY_API_KEY || !env.UNDERSTUDY_ORG_ID || gateway.organizationId !== env.UNDERSTUDY_ORG_ID) throw new Error('Gateway credential organization does not match the application configuration.');
     const origin = new URL(env.UNDERSTUDY_GATEWAY_URL || '');
@@ -25,8 +30,8 @@ export function readConfig(env = process.env) {
     const url = new URL(baseURL);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('Use a plain SDK base URL without credentials, query or fragment.');
   }
-  return { mode, model, apiKey, baseURL, gateway, maxModelCalls, maxOutputTokens: 2400, maxToolCalls: 40, liveReady: env.CRM_ALLOW_LIVE === '1' && Boolean(apiKey && gateway) && model !== 'fixture-model' };
+  return { mode, provider, model, apiKey, baseURL, gateway, maxModelCalls, maxOutputTokens: 2400, maxToolCalls: 40, liveReady: env.CRM_ALLOW_LIVE === '1' && Boolean(apiKey && (provider === 'openai' || gateway)) && model !== 'fixture-model' };
 }
 export function publicConfig(config) {
-  return { mode: config.mode, model: config.model, liveReady: config.liveReady, maxModelCalls: config.maxModelCalls, maxToolCalls: config.maxToolCalls, maxOutputTokens: config.maxOutputTokens };
+  return { mode: config.mode, provider: config.provider, model: config.model, liveReady: config.liveReady, maxModelCalls: config.maxModelCalls, maxToolCalls: config.maxToolCalls, maxOutputTokens: config.maxOutputTokens };
 }

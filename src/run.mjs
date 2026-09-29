@@ -8,7 +8,7 @@ for (let i = 0; i < args.length; i++) {
   if (!known.has(args[i])) throw new Error('Unknown argument. Use --mode offline|live, --meeting <id>, --reset, or --recover.');
   if (!['--reset', '--recover'].includes(args[i])) { if (!args[i + 1] || args[i + 1].startsWith('--')) throw new Error('Missing argument value.'); i++; }
 }
-const store = openStore();
+const store = openStore({ path: process.env.CRM_DB_PATH });
 let activeRun = null;
 function shutdown(signal) {
   try {
