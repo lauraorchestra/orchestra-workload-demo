@@ -1,0 +1,23 @@
+{
+  "name": "orchestra-crm-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Synthetic CRM meeting follow-through application for local integration testing.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "run:offline": "node src/run.mjs --mode offline",
+    "run:live": "node src/run.mjs --mode live",
+    "reset": "node src/run.mjs --reset",
+    "recover": "node src/run.mjs --recover",
+    "start:gateway": "node scripts/gateway.mjs serve",
+    "run:gateway": "node scripts/gateway.mjs run"
+  },
+  "dependencies": {
+    "openai": "7.23.0"
+  }
+}

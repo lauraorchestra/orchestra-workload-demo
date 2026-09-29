@@ -1,0 +1,13 @@
+{
+  "organizationId": "replace-with-verified-owned-organization-id",
+  "origin": "https://api.understudylabs.com",
+  "project": "crm-test-lab",
+  "environment": "test",
+  "workloads": {
+    "extractMeetingFacts": "extract-meeting-facts",
+    "reconcileDeal": "reconcile-deal",
+    "assessDealReadiness": "assess-deal-readiness",
+    "draftFollowUp": "draft-follow-up"
+  },
+  "credentialReference": "replace-with-private-credential-reference-from-cli"
+}
