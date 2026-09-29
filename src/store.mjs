@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { chmodSync, existsSync, lstatSync, mkdirSync, openSync, closeSync } from 'node:fs';
-import { dirname, resolve, parse } from 'node:path';
+import { dirname, resolve, parse, relative, isAbsolute, sep } from 'node:path';
 import { homedir, hostname, tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { seed, scenarioExpectations } from './seed.mjs';
@@ -85,6 +85,26 @@ function privatePath(path) {
   chmodSync(destination, 0o600);
   for (const suffix of ['-wal', '-shm', '-journal']) if (existsSync(destination + suffix)) chmodSync(destination + suffix, 0o600);
   return destination;
+}
+
+export function openAppStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
+  string(path, 'database path', 4096);
+  const root = resolve('.understudy');
+  const destination = resolve(path);
+  const child = relative(root, destination);
+  if (!child || child === '..' || child.startsWith(`..${sep}`) || isAbsolute(child)) {
+    fail('PRIVATE_DIRECTORY', 'CRM_DB_PATH must be a file inside the ignored .understudy directory.');
+  }
+  // Check every component before creating directories or opening SQLite.
+  for (let current = destination; ; current = dirname(current)) {
+    try {
+      if (lstatSync(current).isSymbolicLink()) fail('PRIVATE_DIRECTORY', 'The database path must not contain symbolic links.');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (current === root) break;
+  }
+  return openStore({ path: destination });
 }
 
 export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
