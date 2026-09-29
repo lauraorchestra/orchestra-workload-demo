@@ -88,13 +88,13 @@ function privatePath(path) {
   return destination;
 }
 
-export function openAppStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
+export function openAppStore({ path = resolve('.local/crm.sqlite') } = {}) {
   string(path, 'database path', 4096);
-  const root = resolve('.understudy');
+  const root = resolve('.local');
   const destination = resolve(path);
   const child = relative(root, destination);
   if (!child || child === '..' || child.startsWith(`..${sep}`) || isAbsolute(child)) {
-    fail('PRIVATE_DIRECTORY', 'CRM_DB_PATH must be a file inside the ignored .understudy directory.');
+    fail('PRIVATE_DIRECTORY', 'CRM_DB_PATH must be a file inside the ignored .local directory.');
   }
   // Check every component before creating directories or opening SQLite.
   for (let current = destination; ; current = dirname(current)) {
@@ -108,7 +108,7 @@ export function openAppStore({ path = resolve('.understudy/crm.sqlite') } = {}) 
   return openStore({ path: destination });
 }
 
-export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
+export function openStore({ path = resolve('.local/crm.sqlite') } = {}) {
   string(path, 'database path', 4096);
   const db = new DatabaseSync(privatePath(path));
   db.exec(`PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE; PRAGMA busy_timeout = 3000;

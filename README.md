@@ -43,8 +43,8 @@ Run history supports loading older pages; viewing a run never executes it again.
 Runs created before full capture retain their original events and outcomes, but
 their exact prompts and responses are unavailable. The explorer labels this gap;
 it does not reconstruct missing evidence. New capture records stay in the same
-private, ignored `.understudy` database. API keys and authorization headers are
-never included in the capture.
+private, ignored `.local/crm.sqlite` database by default. API keys and authorization
+headers are never included in the capture.
 
 ## Run directly with OpenAI
 
@@ -67,15 +67,15 @@ defaults to offline fixtures, so having a shell key alone does not enable live
 traffic. Stop the server before switching between direct and gateway modes.
 
 For a fresh baseline while preserving an earlier database and its history, choose
-a separate private path inside `.understudy` (paths outside it and symbolic links
+a separate private path inside `.local` (paths outside it and symbolic links
 are rejected):
 
 ```sh
-CRM_DB_PATH=.understudy/openai-baseline/crm.sqlite npm run start:openai
+CRM_DB_PATH=.local/openai-baseline/crm.sqlite npm run start:openai
 ```
 
 Keep that same `CRM_DB_PATH` when later testing the gateway against this data.
-The UI and terminal use `.understudy/crm.sqlite` when it is omitted. Reset and
+The UI and terminal use `.local/crm.sqlite` when it is omitted. Reset and
 recovery also act on the selected database.
 
 ## Run through Orchestra
@@ -137,9 +137,13 @@ workloads. Existing private gateway configurations from the old four-stage app
 need an explicit `workloads.meetingFollowThrough` mapping before gateway runs.
 Direct OpenAI mode is unaffected.
 
-Runtime data and evidence live in ignored, private `.understudy/`, including
-SQLite snapshots, run events and any gateway verification receipts. No credentials
-or hosted organization/project/workload identities belong in this source history.
+The app owns its database and run history in ignored, private `.local/`, including
+SQLite snapshots, run events, and captured model requests and responses. Optional
+gateway configuration and gateway verification evidence belong in ignored,
+private `.understudy/`. The app works without that directory in direct OpenAI or
+offline mode. Neither directory belongs in source history or application packages;
+credentials stay outside the repository. No hosted organization, project, or
+workload identities belong in source history.
 
 ## Reproduce the test locally
 
@@ -242,4 +246,4 @@ environment. Allow bounded read retries for indexing; do not resend inference
 to make logs appear. Confirm the same trace in the dashboard after checking its
 organization. A successful HTTP response alone is insufficient: incorrect
 inference names can land in the organization's default workload. Keep exact run
-IDs, logs, screenshots, and verification receipts in `.understudy/`.
+IDs, logs, screenshots, and gateway verification receipts in `.understudy/`.

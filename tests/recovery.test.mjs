@@ -11,7 +11,7 @@ import { openStore, scenarioExpectations as expected } from '../src/store.mjs';
 
 function fixture(t) {
   const directory = mkdtempSync(join(tmpdir(), 'synthetic-crm-recovery-'));
-  const path = join(directory, '.understudy', 'crm.sqlite');
+  const path = join(directory, '.local', 'crm.sqlite');
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   return { directory, path };
 }

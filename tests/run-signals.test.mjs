@@ -51,7 +51,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     ]);
     assert.equal(ready[0], 'model-pending');
 
-    store = openStore({ path: join(directory, '.understudy', 'crm.sqlite') });
+    store = openStore({ path: join(directory, '.local', 'crm.sqlite') });
     const run = store.listRuns()[0];
     assert.equal(run.status, 'running');
     // A previous tool may have already committed before the interrupted model call.
