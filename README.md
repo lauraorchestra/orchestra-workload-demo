@@ -63,6 +63,21 @@ The four model tasks are `extractMeetingFacts`, `reconcileDeal`,
 two as model-backed tools. The eight SQLite tools perform deterministic reads
 and writes; they are not separate inference workloads.
 
+## Recover an interrupted run
+
+Normal shutdown records a failed run. A hard kill or machine crash can leave a
+run marked active, which blocks new runs and reset. Use `npm run recover` after
+the runner has stopped. Recovery checks the stored owner PID on the same host
+and proceeds only when the operating system reports that the process no longer
+exists. It marks the run failed, keeps any applied CRM changes, preserves its
+original snapshot and events, and adds a recovery event and final snapshot.
+Review that record before resuming or resetting the disposable CRM.
+
+Recovery never starts inference or replays writes. It refuses live owners,
+permission errors, foreign hostnames, and legacy runs without ownership metadata.
+A reused PID is conservatively treated as live. Preserve the database for manual
+inspection when ownership cannot be established; recovery has no force option.
+
 ## Configure an owned gateway test
 
 Install the CLI that provides `projects`, `workloads`, `requests`, and

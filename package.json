@@ -13,6 +13,7 @@
     "run:offline": "node src/run.mjs --mode offline",
     "run:live": "node src/run.mjs --mode live",
     "reset": "node src/run.mjs --reset",
+    "recover": "node src/run.mjs --recover",
     "start:gateway": "node scripts/gateway.mjs serve",
     "run:gateway": "node scripts/gateway.mjs run"
   },

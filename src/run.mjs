@@ -3,10 +3,10 @@ import { readConfig } from './config.mjs';
 import { runMeeting } from './runner.mjs';
 const args = process.argv.slice(2);
 const value = name => args.includes(name) ? args[args.indexOf(name) + 1] : undefined;
-const known = new Set(['--mode', '--meeting', '--reset']);
+const known = new Set(['--mode', '--meeting', '--reset', '--recover']);
 for (let i = 0; i < args.length; i++) {
-  if (!known.has(args[i])) throw new Error('Unknown argument. Use --mode offline|live, --meeting <id>, or --reset.');
-  if (args[i] !== '--reset') { if (!args[i + 1] || args[i + 1].startsWith('--')) throw new Error('Missing argument value.'); i++; }
+  if (!known.has(args[i])) throw new Error('Unknown argument. Use --mode offline|live, --meeting <id>, --reset, or --recover.');
+  if (!['--reset', '--recover'].includes(args[i])) { if (!args[i + 1] || args[i + 1].startsWith('--')) throw new Error('Missing argument value.'); i++; }
 }
 const store = openStore();
 let activeRun = null;
@@ -26,7 +26,11 @@ const onTerminate = () => shutdown('SIGTERM');
 process.on('SIGINT', onInterrupt);
 process.on('SIGTERM', onTerminate);
 try {
-  if (args.includes('--reset')) {
+  if (args.includes('--recover')) {
+    if (args.length !== 1) throw new Error('Use --recover by itself.');
+    const recovered = store.recoverAbandonedRuns();
+    console.log(JSON.stringify({ recovered: recovered.map(run => run.id) }));
+  } else if (args.includes('--reset')) {
     if (args.length !== 1) throw new Error('Use --reset by itself.');
     store.reset();
     console.log(JSON.stringify({ reset: true }));

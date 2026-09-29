@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { chmodSync, existsSync, lstatSync, mkdirSync, openSync, closeSync } from 'node:fs';
 import { dirname, resolve, parse } from 'node:path';
-import { homedir, tmpdir } from 'node:os';
+import { homedir, hostname, tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { seed, scenarioExpectations } from './seed.mjs';
 
@@ -106,6 +106,11 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
     try { const value = operation(); db.exec('COMMIT'); return value; }
     catch (error) { db.exec('ROLLBACK'); throw error; }
   }
+  transaction(() => {
+    const columns = new Set(db.prepare('PRAGMA table_info(runs)').all().map((column) => column.name));
+    if (!columns.has('owner_pid')) db.exec('ALTER TABLE runs ADD COLUMN owner_pid INTEGER');
+    if (!columns.has('owner_hostname')) db.exec('ALTER TABLE runs ADD COLUMN owner_hostname TEXT');
+  });
   function all(table) { return db.prepare(`SELECT body FROM ${table} ORDER BY rowid`).all().map((row) => JSON.parse(row.body)); }
   function lookup(table, value, label) {
     id(value, label);
@@ -193,7 +198,12 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
       return transaction(() => {
         const deal = lookup('deals', args.dealId, 'dealId'); scope(context.runId, deal, args.evidence);
         const title = args.title.trim();
-        if (db.prepare('SELECT id FROM tasks WHERE deal_id = ? AND lower(title) = lower(?) AND due_date = ?').get(deal.id, title, args.dueDate)) fail('DUPLICATE_TASK', 'A task with this title and due date already exists for this deal.');
+        const duplicate = db.prepare('SELECT body FROM tasks WHERE deal_id = ? AND lower(title) = lower(?) AND due_date = ?').get(deal.id, title, args.dueDate);
+        if (duplicate) {
+          const existing = JSON.parse(duplicate.body);
+          if (existing.status === 'open' && existing.title === title && existing.body === args.body && JSON.stringify([...existing.evidence].sort()) === JSON.stringify([...args.evidence].sort())) return existing;
+          fail('DUPLICATE_TASK', 'A task with this title and due date already exists with different content, evidence, or status.');
+        }
         const task = { id: `task_${randomUUID()}`, dealId: deal.id, accountId: deal.accountId, title, dueDate: args.dueDate, body: args.body, status: 'open', evidence: [...args.evidence], createdAt: now() };
         db.prepare('INSERT INTO tasks (id,deal_id,title,due_date,body) VALUES (?,?,?,?,?)').run(task.id, task.dealId, task.title, task.dueDate, JSON.stringify(task));
         appendEvent(context.runId, { type: 'mutation', stage: 'tool', data: { tool: 'create_follow_up_task', entityType: 'task', entityId: task.id, before: null, after: task, evidence: args.evidence } });
@@ -211,8 +221,28 @@ export function openStore({ path = resolve('.understudy/crm.sqlite') } = {}) {
       return transaction(() => {
         if (db.prepare("SELECT id FROM runs WHERE status = 'running' LIMIT 1").get()) fail('RUN_ACTIVE', 'A run is already active.');
         const runId = `run_${randomUUID()}`;
-        db.prepare('INSERT INTO runs (id,meeting_id,mode,status,started_at,before_json) VALUES (?,?,?,?,?,?)').run(runId, args.meetingId, args.mode, 'running', now(), JSON.stringify(snapshot()));
+        db.prepare('INSERT INTO runs (id,meeting_id,mode,status,started_at,before_json,owner_pid,owner_hostname) VALUES (?,?,?,?,?,?,?,?)').run(runId, args.meetingId, args.mode, 'running', now(), JSON.stringify(snapshot()), process.pid, hostname());
         return getRun(runId);
+      });
+    },
+    recoverAbandonedRuns() {
+      return transaction(() => {
+        const abandoned = db.prepare("SELECT id,owner_pid,owner_hostname FROM runs WHERE status = 'running'").all();
+        for (const row of abandoned) {
+          if (row.owner_hostname !== hostname() || !Number.isSafeInteger(row.owner_pid) || row.owner_pid <= 0) fail('RUN_OWNER_UNKNOWN', 'Cannot recover a run with missing or foreign owner metadata. Preserve its database for manual inspection.');
+          try { process.kill(row.owner_pid, 0); }
+          catch (error) {
+            if (error.code === 'ESRCH') continue;
+            fail('RUN_OWNER_UNKNOWN', 'Cannot prove the run owner has stopped; recovery was refused.');
+          }
+          fail('RUN_ACTIVE', 'The run owner is still alive; stop it before attempting recovery.');
+        }
+        return abandoned.map((row) => {
+          const error = { code: 'RUN_ABANDONED', message: 'Run owner exited without finishing. Review already-applied CRM changes before resuming.' };
+          appendEvent(row.id, { type: 'recovery', stage: 'run', data: { ...error, ownerPid: row.owner_pid, ownerHostname: row.owner_hostname } });
+          db.prepare("UPDATE runs SET status = 'failed', finished_at = ?, after_json = ?, error_json = ? WHERE id = ?").run(now(), JSON.stringify(snapshot()), JSON.stringify(error), row.id);
+          return getRun(row.id);
+        });
       });
     },
     appendEvent,

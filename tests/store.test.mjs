@@ -89,7 +89,7 @@ test('field, type, date, version, evidence and account violations cause no write
   }
 });
 
-test('task validation rejects impossible dates, cross-account evidence, extras and duplicates', (t) => {
+test('task validation rejects impossible dates, cross-account evidence, extras and conflicting duplicates', (t) => {
   const { store, run, context } = fixture(t);
   const initial = store.snapshot();
   for (const [code, args] of [
@@ -104,11 +104,32 @@ test('task validation rejects impossible dates, cross-account evidence, extras a
     assert.deepEqual(store.snapshot(), initial);
     assert.equal(store.getRun(run.id).events.length, 0);
   }
-  store.executeTool('create_follow_up_task', taskArgs(), context);
+  const task = store.executeTool('create_follow_up_task', taskArgs(), context);
   const after = store.snapshot();
-  assert.throws(() => store.executeTool('create_follow_up_task', taskArgs(), context), { code: 'DUPLICATE_TASK' });
+  assert.deepEqual(store.executeTool('create_follow_up_task', taskArgs(), context), task);
+  assert.throws(() => store.executeTool('create_follow_up_task', { ...taskArgs(), body: 'A conflicting description.' }, context), { code: 'DUPLICATE_TASK' });
   assert.deepEqual(store.snapshot(), after);
   assert.equal(store.getRun(run.id).events.length, 1);
+  const completed = store.snapshot().tasks.find(task => task.dealId === expected.dealId && task.status === 'completed');
+  assert.ok(completed);
+  const { dealId, title, dueDate, body, evidence } = completed;
+  assert.throws(() => store.executeTool('create_follow_up_task', { dealId, title, dueDate, body, evidence }, context), { code: 'DUPLICATE_TASK' });
+  assert.deepEqual(store.snapshot(), after);
+  assert.equal(store.getRun(run.id).events.length, 1);
+});
+
+test('a later run reuses an identical committed task without another mutation', (t) => {
+  const { store, run, context } = fixture(t);
+  const args = { ...taskArgs(), evidence: [expected.meetingId, 'tl_maple_tentative'] };
+  const task = store.executeTool('create_follow_up_task', args, context);
+  store.finishRun(run.id, { status: 'failed', error: 'Synthetic failure after the task was committed.' });
+  const retry = store.createRun({ meetingId: expected.meetingId, mode: 'offline' });
+  const persisted = store.snapshot();
+  assert.deepEqual(store.executeTool('create_follow_up_task', { ...args, evidence: [...args.evidence].reverse() }, { runId: retry.id }), task);
+  assert.deepEqual(store.snapshot(), persisted);
+  assert.equal(store.getRun(retry.id).events.length, 0);
+  assert.throws(() => store.executeTool('create_follow_up_task', { ...args, evidence: [expected.meetingId] }, { runId: retry.id }), { code: 'DUPLICATE_TASK' });
+  assert.equal(store.getRun(run.id).events.filter(event => event.type === 'mutation').length, 1);
 });
 
 test('optimistic versions detect stale writes across independent SQLite connections', (t) => {
