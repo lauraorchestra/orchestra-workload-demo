@@ -23,6 +23,10 @@ export function readConfig(env = process.env) {
     if (typeof gateway.project !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(gateway.project) || gateway.environment !== 'test') throw new Error('This synthetic lab requires a project slug (not a management ID) and test request environment.');
     const workload = gateway.workloads?.[crmAgent.stage];
     if (typeof workload !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(workload)) throw new Error(`Missing workload name (not a management ID) for ${crmAgent.stage}.`);
+    for (const stage of ['eventExtraction', 'requestClassification']) {
+      const name = gateway.workloads?.[stage];
+      if (name !== undefined && (typeof name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))) throw new Error(`Invalid workload slug for ${stage}.`);
+    }
     apiKey = env.UNDERSTUDY_API_KEY;
     baseURL = `${origin.origin}/v1`;
   }
@@ -33,5 +37,5 @@ export function readConfig(env = process.env) {
   return { mode, provider, model, apiKey, baseURL, gateway, maxModelCalls, maxOutputTokens: 2400, maxToolCalls: 40, liveReady: env.CRM_ALLOW_LIVE === '1' && Boolean(apiKey && (provider === 'openai' || gateway)) && model !== 'fixture-model' };
 }
 export function publicConfig(config) {
-  return { mode: config.mode, provider: config.provider, model: config.model, liveReady: config.liveReady, maxModelCalls: config.maxModelCalls, maxToolCalls: config.maxToolCalls, maxOutputTokens: config.maxOutputTokens };
+  return { mode: config.mode, provider: config.provider, model: config.model, liveReady: config.liveReady, maxModelCalls: config.maxModelCalls, maxToolCalls: config.maxToolCalls, maxOutputTokens: config.maxOutputTokens, structuredLiveReady: config.liveReady && (config.provider === 'openai' || Boolean(config.gateway?.workloads?.eventExtraction && config.gateway?.workloads?.requestClassification)) };
 }

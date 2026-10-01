@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Orchestra · CRM Lab</title>
+    <link rel="stylesheet" href="/lab.css">
+    <script src="/lab.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="CRM navigation">
+        <a class="brand" href="/" aria-label="Orchestra CRM Lab home"><span class="brand-mark" aria-hidden="true">o</span><span>orchestra<small>SALES DEMO</small></span></a>
+        <div class="workspace-label"><span class="workspace-avatar">S</span><span>Synthetic workspace<small>Local development</small></span><span class="local-dot" title="Local application"></span></div>
+        <div class="nav-caption">WORKSPACE</div>
+        <div class="nav-current"><span aria-hidden="true">▦</span> Meeting follow-through <span class="nav-arrow" aria-hidden="true">↗</span></div>
+        <a class="debug-nav-link" href="/debug"><span aria-hidden="true">⌁</span> Run explorer <span aria-hidden="true">↗</span></a>
+        <div class="sidebar-section-heading"><h2>Accounts</h2><span id="account-count" class="sidebar-count">—</span></div>
+        <nav id="account-list" class="account-list" aria-label="Synthetic accounts"><p class="sidebar-placeholder">Loading accounts…</p></nav>
+        <div class="sidebar-bottom"><span class="lab-symbol" aria-hidden="true">✳</span><strong>A safe place to try things.</strong><p>Invented accounts and meetings. Changes stay in this local CRM.</p><button id="reset-button" class="reset-button" type="button">↺ Reset synthetic data</button></div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar"><div class="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong>Meeting follow-through</strong></div><span class="synthetic-badge"><span aria-hidden="true">◈</span> SYNTHETIC DATA</span></header>
+        <div class="page-content">
+          <div id="page-error" class="error-banner" role="alert" hidden></div>
+          <section class="page-heading"><div><p class="eyebrow">FROM CONVERSATION TO ACTION</p><h1>Every meeting, followed through.</h1><p class="page-description">Turn a customer conversation into evidence-backed deal updates, next steps and a follow-up ready for approval.</p></div><span class="local-label"><span></span> Local CRM</span></section>
+          <section class="account-overview" aria-labelledby="account-title"><div class="account-title-group"><div id="account-avatar" class="account-avatar" aria-hidden="true">…</div><div><p class="eyebrow">ACCOUNT WORKSPACE</p><h2 id="account-title">Loading your workspace…</h2><p id="account-description" class="muted">Your synthetic CRM records will appear here.</p></div></div><div id="account-stats" class="account-stats"></div></section>
+
+          <section class="card demo-guide"><div class="card-heading"><h2>Ten-minute demo</h2><span class="subtle-tag">SALES → ARCHITECTURE</span></div><p>1. Explore the customer history · 2. Run meeting follow-through · 3. Review the draft · 4. Compare models · 5. Inspect the evidence</p></section>
+          <div class="workspace-grid">
+            <div class="source-column">
+              <section class="card deals-card" aria-labelledby="deals-title"><div class="card-heading"><h2 id="deals-title"><span class="section-icon" aria-hidden="true">◇</span> Deals</h2><span id="deals-count" class="count-badge">0</span></div><div id="deal-list" class="deal-list"><p class="empty-state">Loading deals…</p></div><div id="deal-detail" class="deal-detail" hidden></div></section>
+              <section class="card meeting-card" aria-labelledby="meeting-title"><div class="card-heading"><h2 id="meeting-title"><span class="section-icon" aria-hidden="true">▤</span> Meeting notes</h2><span class="subtle-tag">INPUT</span></div><div class="meeting-selector"><label for="meeting-select">Choose a synthetic meeting</label><select id="meeting-select" disabled><option>Loading meetings…</option></select></div><div id="meeting-meta" class="meeting-meta"></div><div class="note-paper" role="region" aria-label="Full synthetic meeting notes" tabindex="0"><span class="note-accent" aria-hidden="true"></span><p id="meeting-note" class="meeting-note">Loading meeting notes…</p></div><div class="source-footer"><span aria-hidden="true">◎</span> Choose a meeting to explore several actions, uncertain information, or no changes.</div></section>
+              <section class="card"><div class="card-heading"><h2>Customer history</h2><span id="history-count" class="count-badge"></span></div><p class="card-description">Dated conversations preserve old estimates, approval steps and stakeholder changes.</p><label class="meeting-selector">Search history<input id="history-search" type="search" placeholder="Spending, deployment, stakeholder…"></label><div id="customer-history" class="customer-history"></div></section>
+              <section class="card"><div class="card-heading"><h2>Next steps</h2></div><div id="account-tasks"></div></section>
+              <section class="card contacts-card" aria-labelledby="contacts-title"><div class="card-heading"><h2 id="contacts-title"><span class="section-icon" aria-hidden="true">♧</span> People</h2></div><div id="contact-list" class="contact-list"><p class="empty-state">Loading contacts…</p></div></section>
+            </div>
+
+            <div class="execution-column">
+              <section class="card run-card" aria-labelledby="run-title"><div class="card-heading"><h2 id="run-title"><span class="section-icon" aria-hidden="true">✳</span> Follow-through agent</h2><span id="run-status" class="status-pill status-idle">Ready</span></div><p class="card-description">One conversation, one goal. The agent chooses its tools and can update several records, create tasks, or explain why no change is appropriate.</p><details class="agent-instructions"><summary>Read the exact agent instructions</summary><p>These are the current instructions used for a new run. Each saved run retains its own original prompt in Run explorer.</p><h3>Goal</h3><pre id="agent-goal">Loading agent goal…</pre><h3>System prompt</h3><pre id="agent-system-prompt">Loading agent instructions…</pre></details><fieldset id="mode-fieldset" class="mode-selector"><legend class="sr-only">Execution mode</legend><label><input type="radio" name="mode" value="offline" checked><span><strong>Fixture / offline</strong><small>Deterministic transport exercise</small></span></label><label><input type="radio" name="mode" value="live"><span><strong>Real model</strong><small>Live inference through the configured endpoint</small></span></label></fieldset><p id="mode-explanation" class="mode-explanation">Offline mode exercises the tool workflow using fixture responses. It does not prove live model behavior.</p><div class="model-config"><div><span>MODEL</span><strong id="model-value">Loading configuration…</strong></div><div><span>LLM BUDGET</span><strong id="budget-value">Reading runner limits…</strong></div><p id="live-readiness">Checking live configuration…</p></div><button id="run-button" type="button" class="primary-button" disabled><span id="run-button-label">Run follow-through</span><span aria-hidden="true">↗</span></button><div id="run-error" class="inline-error" role="alert" hidden></div></section>
+
+              <section class="card activity-card" aria-labelledby="activity-title"><div class="card-heading"><h2 id="activity-title"><span class="section-icon" aria-hidden="true">⌁</span> Run activity</h2><span id="event-count" class="subtle-tag">TOOL TIMELINE</span></div><div id="run-metadata" class="run-metadata" hidden></div><div id="timeline" class="timeline"><div class="waiting-state"><div class="waiting-icon" aria-hidden="true">↗</div><h3>Ready when you are</h3><p>Start a run to watch the shared model conversation, tool calls, and local CRM changes appear here.</p></div></div></section>
+            </div>
+          </div>
+
+          <section id="outcome-card" class="card outcome-card" aria-labelledby="outcome-title" hidden><div class="card-heading"><h2 id="outcome-title"><span class="section-icon" aria-hidden="true">✓</span> What changed</h2><span id="outcome-mode" class="subtle-tag"></span></div><p id="run-summary" class="run-summary" hidden></p><p id="outcome-explanation" class="outcome-explanation"></p><div id="deal-changes"></div><div id="created-tasks"></div><p id="no-changes" class="empty-state" hidden>No deal field changes or new tasks were recorded in this run.</p></section>
+
+          <section class="card"><div class="card-heading"><h2>Prospect follow-up</h2><span class="subtle-tag">SALESPERSON APPROVAL REQUIRED</span></div><p class="card-description">Review recipients, facts and commitments. Approval is saved locally; this demo does not send email.</p><div id="draft-list"></div></section>
+          <section class="card" id="comparison-card"><div class="card-heading"><h2>Same task. Different model.</h2><span id="comparison-mode" class="subtle-tag">CONTROLLED REPLAY</span></div><p class="card-description">Each model gets a fresh copy of the same synthetic records, history, prompt and tools. Comparisons preserve your current CRM. Select a Cedar meeting above. Live runs use the configured provider and are billable; the pair has at most twice the displayed per-run budget.</p><div class="compare-form"><label>Baseline model<input id="baseline-model" placeholder="Configured frontier model"></label><label>Candidate model<input id="candidate-model" placeholder="Configured open-weight model"></label></div><details class="pricing-settings"><summary>Optional cost estimates</summary><p>Enter USD per million tokens from your provider pricing. These are user-supplied estimates, not verified billing. Leave blank to show cost as unavailable. Estimates are withheld if the served model differs from the requested model.</p><div class="compare-form"><label>Baseline input rate<input id="baseline-input-rate" type="number" min="0" step="any"></label><label>Baseline output rate<input id="baseline-output-rate" type="number" min="0" step="any"></label><label>Candidate input rate<input id="candidate-input-rate" type="number" min="0" step="any"></label><label>Candidate output rate<input id="candidate-output-rate" type="number" min="0" step="any"></label></div></details><button id="compare-button" type="button" class="primary-button">Compare selected meeting</button><div id="comparison-error" class="inline-error" role="alert" hidden></div><div id="comparison-results" aria-live="polite"></div></section>
+          <section class="run-history" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">Recent runs</h2><span>Local execution journal</span></div><div id="history-list"><p class="history-empty">No runs yet. Your next run starts the story.</p></div></section>
+          <footer class="page-footer"><span>Orchestra CRM Lab</span><p>All records are invented. No email is sent and no external CRM is modified.</p><span id="connection-status" aria-live="polite">Connecting…</span></footer>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

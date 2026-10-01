@@ -13,6 +13,7 @@ const knownStages = [
 ];
 const stageNames = Object.fromEntries(knownStages.map(stage => [stage.id, stage.title]));
 const toolDescriptions = {
+  create_follow_up_draft: "Save a prospect follow-up awaiting salesperson approval. This tool cannot approve or send it.",
   search_accounts: "Search the local CRM for candidate accounts. A similar name may belong to a different company.",
   get_account: "Read an account and its contacts to verify the company and people involved.",
   list_deals: "Read the account’s deals to identify the opportunity discussed in the meeting.",

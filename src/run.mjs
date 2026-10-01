@@ -1,4 +1,4 @@
-import { openAppStore } from './store.mjs';
+import { openAppStore, scenarioExpectations } from './store.mjs';
 import { readConfig } from './config.mjs';
 import { runMeeting } from './runner.mjs';
 const args = process.argv.slice(2);
@@ -38,7 +38,7 @@ try {
     const config = readConfig();
     const mode = value('--mode') || config.mode;
     if (!['offline', 'live'].includes(mode)) throw new Error('Invalid mode.');
-    const meetingId = value('--meeting') || store.overview().meetings[0]?.id;
+    const meetingId = value('--meeting') || scenarioExpectations.meetingId;
     const run = await runMeeting({ store, meetingId, mode, config, onRunCreated: run => { activeRun = run.id; } });
     activeRun = null;
     const responses = run.events.filter(e => e.type === 'llm_response');

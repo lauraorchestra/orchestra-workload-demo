@@ -1,3 +1,5 @@
+import { publicTaskDemos } from './task-demos.mjs';
+import { compareModels } from './comparison.mjs';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -11,10 +13,16 @@ const config = readConfig();
 const port = Number(process.env.CRM_PORT || 4317);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid local port.');
 let activeRun = null;
+let activeComparison = null;
+for (const comparison of store.listComparisons()) if (comparison.status === 'running') store.saveComparison({ ...comparison, status: 'failed', error: 'Server stopped during comparison; completed sides are retained. No inference was replayed.', finishedAt: new Date().toISOString() });
 const staticFiles = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
+  ['/lab', ['lab.html', 'text/html; charset=utf-8']],
+  ['/lab.js', ['lab.js', 'text/javascript; charset=utf-8']],
+  ['/lab.css', ['lab.css', 'text/css; charset=utf-8']],
+  ['/inter.woff2', ['inter.woff2', 'font/woff2']],
   ['/debug', ['debug.html', 'text/html; charset=utf-8']],
   ['/debug.js', ['debug.js', 'text/javascript; charset=utf-8']],
   ['/debug.css', ['debug.css', 'text/css; charset=utf-8']],
@@ -52,7 +60,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'" });
       return res.end(await readFile(fileURLToPath(new URL(`../public/${file}`, import.meta.url))));
     }
-    if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, { ...store.overview(), runs: store.listRuns(), config: publicConfig(config), agent: crmAgent, activeRun });
+    if (req.method === 'GET' && url.pathname === '/api/state') return json(res, 200, { ...store.overview(), taskDemos: publicTaskDemos(), runs: store.listRuns(), config: publicConfig(config), agent: crmAgent, activeRun, activeComparison });
     if (req.method === 'GET' && url.pathname === '/api/runs') {
       const limit = Number(url.searchParams.get('limit') ?? 50);
       const offset = Number(url.searchParams.get('offset') ?? 0);
@@ -62,18 +70,40 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { runs: runs.slice(0, limit), hasMore, nextOffset: hasMore ? offset + limit : null });
     }
     if (req.method === 'GET' && url.pathname.startsWith('/api/runs/')) {
-      const run = store.getRun(decodeURIComponent(url.pathname.slice('/api/runs/'.length)));
+      const id = decodeURIComponent(url.pathname.slice('/api/runs/'.length));
+      let run;
+      try { run = store.getRun(id); }
+      catch (error) {
+        if (error.code !== 'NOT_FOUND') throw error;
+        run = store.listComparisons().flatMap(c => c.sides).find(side => side.run.id === id)?.run;
+      }
       return json(res, run ? 200 : 404, run || { error: 'Run not found.' });
+    }
+    const comparisonReview = url.pathname.match(/^\/api\/comparisons\/([a-zA-Z0-9_-]+)\/drafts\/([a-zA-Z0-9_-]+)$/);
+    if (req.method === 'POST' && comparisonReview) {
+      if (activeRun || activeComparison) return json(res, 409, { error: 'A run or comparison is active.' });
+      return json(res, 200, store.reviewComparisonDraft(comparisonReview[1], comparisonReview[2], await readBody(req)));
+    }
+    if (req.method === 'POST' && url.pathname.startsWith('/api/drafts/')) {
+      if (activeComparison) return json(res, 409, { error: 'A comparison is active.' });
+      return json(res, 200, store.reviewDraft(decodeURIComponent(url.pathname.slice('/api/drafts/'.length)), await readBody(req)));
+    }
+    if (req.method === 'POST' && url.pathname === '/api/comparisons') {
+      const args = await readBody(req);
+      if (activeRun || activeComparison) return json(res, 409, { error: 'A run or comparison is active.' });
+      const promise = compareModels({ store, config, args, onCreated: comparison => { activeComparison = comparison.id; json(res, 202, { id: comparison.id }); } });
+      promise.catch(error => { if (!res.headersSent) json(res, errorStatus(error), { error: error.message }); }).finally(() => { activeComparison = null; });
+      return;
     }
     if (req.method === 'POST' && url.pathname === '/api/reset') {
       await readBody(req);
-      if (activeRun) return json(res, 409, { error: 'A run is active.' });
+      if (activeRun || activeComparison) return json(res, 409, { error: 'A run is active.' });
       store.reset();
       return json(res, 200, { reset: true });
     }
     if (req.method === 'POST' && url.pathname === '/api/runs') {
       const { meetingId, mode = config.mode } = await readBody(req);
-      if (activeRun) return json(res, 409, { error: 'A run is already active.' });
+      if (activeRun || activeComparison) return json(res, 409, { error: 'A run is already active.' });
       if (!['offline', 'live'].includes(mode)) return json(res, 400, { error: 'Invalid mode.' });
       if (mode === 'live' && !config.liveReady) return json(res, 400, { error: 'Live inference is not configured/enabled.' });
       if (typeof meetingId !== 'string') return json(res, 400, { error: 'meetingId must be a string.' });
@@ -90,6 +120,10 @@ const server = http.createServer(async (req, res) => {
 });
 server.listen(port, '127.0.0.1', () => console.log(`Synthetic CRM lab: http://127.0.0.1:${port} (${config.mode}; live ${config.liveReady ? 'enabled' : 'disabled'})`));
 function shutdown() {
+  if (activeComparison) {
+    store.saveComparison({ ...store.getComparison(activeComparison), status: 'failed', error: 'Application stopped during comparison; no inference was replayed.', finishedAt: new Date().toISOString() });
+    activeComparison = null;
+  }
   if (activeRun) {
     store.finishRun(activeRun, { status: 'failed', error: 'Application stopped during run; review any already-applied database changes before resuming.' });
     activeRun = null;

@@ -8,8 +8,13 @@ import { seed, scenarioExpectations } from './seed.mjs';
 export { scenarioExpectations };
 
 const stages = ['discovery', 'evaluation', 'proposal', 'negotiation', 'won', 'lost'];
-const mutableFields = ['stage', 'amount', 'closeDate', 'nextStep', 'championContactId', 'notes'];
+const mutableFields = ['stage', 'amount', 'closeDate', 'nextStep', 'championContactId', 'notes', 'pain', 'frontierSpendMonthly', 'deployment', 'buyingProcess', 'stakeholderNotes'];
 const fieldDefinitions = [
+  { name: 'pain', type: 'string', writable: true, description: 'Customer problem and desired business outcome.' },
+  { name: 'frontierSpendMonthly', type: 'integer', unit: 'USD/month', writable: true, description: 'Confirmed monthly model operating spend, separate from opportunity amount.' },
+  { name: 'deployment', type: 'enum', values: ['cloud', 'on_prem', 'hybrid', 'unknown'], writable: true, description: 'Confirmed deployment requirement; leave tentative proposals unchanged.' },
+  { name: 'buyingProcess', type: 'string', writable: true, description: 'Approval steps, their order and any unresolved decisions.' },
+  { name: 'stakeholderNotes', type: 'string', writable: true, description: 'Current buying roles, earlier contacts and who should be involved next.' },
   { name: 'stage', type: 'enum', values: stages, writable: true, description: 'Current sales stage. Negotiation is not a signed or won contract.' },
   { name: 'amount', type: 'integer', unit: 'USD', minimum: 0, writable: true, description: 'Total opportunity amount in whole USD, not cents. Do not combine separate opportunities.' },
   { name: 'closeDate', type: 'date', format: 'YYYY-MM-DD', writable: true, description: 'Target close date; not a task deadline.' },
@@ -26,6 +31,11 @@ const stringSchema = { type: 'string', minLength: 1 };
 const dateSchema = { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'A real calendar date in YYYY-MM-DD format.' };
 const evidenceSchema = { type: 'array', minItems: 1, maxItems: 12, uniqueItems: true, items: stringSchema, description: 'IDs of the current meeting and/or retrieved timeline records belonging to the scoped account. Use sources that support this exact action.' };
 const changeProperties = {
+  pain: { type: 'string', minLength: 1, maxLength: 6000 },
+  frontierSpendMonthly: { type: 'integer', minimum: 0, maximum: 1000000000 },
+  deployment: { type: 'string', enum: ['cloud', 'on_prem', 'hybrid', 'unknown'] },
+  buyingProcess: { type: 'string', minLength: 1, maxLength: 6000 },
+  stakeholderNotes: { type: 'string', minLength: 1, maxLength: 6000 },
   stage: { type: 'string', enum: stages }, amount: { type: 'integer', minimum: 0, maximum: 1000000000 }, closeDate: dateSchema,
   nextStep: { type: 'string', minLength: 1, maxLength: 2000 }, championContactId: { type: ['string', 'null'] }, notes: { type: 'string', maxLength: 6000 },
 };
@@ -33,6 +43,10 @@ function definition(name, description, properties, required = Object.keys(proper
   return { type: 'function', function: { name, description, strict: false, parameters: { type: 'object', properties, required, additionalProperties: false } } };
 }
 export const toolDefinitions = [
+  definition('create_follow_up_draft', 'Save a concise prospect follow-up draft for salesperson review. Select existing contacts on this account, cite supporting sources, distinguish confirmed facts from questions, and preserve the buying sequence. This tool cannot approve or send a message.', {
+    dealId: stringSchema, recipientContactIds: { type: 'array', minItems: 1, maxItems: 12, uniqueItems: true, items: stringSchema },
+    subject: { type: 'string', minLength: 1, maxLength: 200 }, body: { type: 'string', minLength: 1, maxLength: 6000 }, evidence: evidenceSchema,
+  }),
   definition('search_accounts', 'Find candidate CRM accounts by name or domain. Similar names can refer to separate businesses. Verify account details and meeting identity before selecting one.', { query: { type: 'string', minLength: 1, maxLength: 200 } }),
   definition('get_account', 'Read account details and its existing contacts to verify identity and select an evidence-supported contact.', { accountId: stringSchema }),
   definition('list_deals', 'List all opportunities for an account. Identify the deal actually discussed and preserve unrelated opportunities.', { accountId: stringSchema }),
@@ -112,6 +126,8 @@ export function openStore({ path = resolve('.local/crm.sqlite') } = {}) {
   string(path, 'database path', 4096);
   const db = new DatabaseSync(privatePath(path));
   db.exec(`PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE; PRAGMA busy_timeout = 3000;
+    CREATE TABLE IF NOT EXISTS drafts (id TEXT PRIMARY KEY, deal_id TEXT NOT NULL REFERENCES deals(id), body TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS comparisons (id TEXT PRIMARY KEY, body TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, body TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS contacts (id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts(id), body TEXT NOT NULL);
@@ -139,7 +155,7 @@ export function openStore({ path = resolve('.local/crm.sqlite') } = {}) {
     if (!row) fail('NOT_FOUND', `${label} was not found.`);
     return JSON.parse(row.body);
   }
-  function snapshot() { return { accounts: all('accounts'), contacts: all('contacts'), deals: all('deals'), tasks: all('tasks') }; }
+  function snapshot() { return { accounts: all('accounts'), contacts: all('contacts'), deals: all('deals'), tasks: all('tasks'), drafts: all('drafts') }; }
   function insertSeeds() {
     for (const value of seed.accounts) db.prepare('INSERT INTO accounts (id,body) VALUES (?,?)').run(value.id, JSON.stringify(value));
     for (const value of seed.contacts) db.prepare('INSERT INTO contacts (id,account_id,body) VALUES (?,?,?)').run(value.id, value.accountId, JSON.stringify(value));
@@ -152,6 +168,10 @@ export function openStore({ path = resolve('.local/crm.sqlite') } = {}) {
   if (!db.prepare("SELECT value FROM metadata WHERE key = 'seed_version'").get()) transaction(insertSeeds);
   // Add newly shipped examples without rewriting an existing meeting or its run history.
   transaction(() => {
+    for (const value of seed.accounts) db.prepare('INSERT OR IGNORE INTO accounts (id,body) VALUES (?,?)').run(value.id, JSON.stringify(value));
+    for (const value of seed.contacts) db.prepare('INSERT OR IGNORE INTO contacts (id,account_id,body) VALUES (?,?,?)').run(value.id, value.accountId, JSON.stringify(value));
+    for (const value of seed.deals) db.prepare('INSERT OR IGNORE INTO deals (id,account_id,version,body) VALUES (?,?,?,?)').run(value.id, value.accountId, value.version, JSON.stringify(value));
+    for (const value of seed.timeline) db.prepare('INSERT OR IGNORE INTO timeline (id,account_id,body) VALUES (?,?,?)').run(value.id, value.accountId, JSON.stringify(value));
     const insert = db.prepare('INSERT OR IGNORE INTO meetings (id,account_id,body) VALUES (?,?,?)');
     for (const meeting of seed.meetings) insert.run(meeting.id, meeting.accountId, JSON.stringify(meeting));
   });
@@ -200,7 +220,27 @@ export function openStore({ path = resolve('.local/crm.sqlite') } = {}) {
     }
     return meeting;
   }
+  function validateRecipients(deal, recipients) {
+    if (!Array.isArray(recipients) || !recipients.length || recipients.length > 12 || new Set(recipients).size !== recipients.length) fail('INVALID_ARGUMENT', 'Select 1–12 distinct recipients.');
+    for (const recipient of recipients) if (lookup('contacts', recipient, 'contactId').accountId !== deal.accountId) fail('SCOPE_MISMATCH', 'Draft recipients must belong to the deal account.');
+  }
   const handlers = {
+    create_follow_up_draft(args, context) {
+      object(args, ['dealId', 'recipientContactIds', 'subject', 'body', 'evidence']);
+      string(args.subject, 'subject', 200); string(args.body, 'body', 6000);
+      return transaction(() => {
+        const deal = lookup('deals', args.dealId, 'dealId');
+        const meeting = scope(context.runId, deal, args.evidence);
+        validateRecipients(deal, args.recipientContactIds);
+        // One draft per meeting/deal; another run must not overwrite a reviewed draft.
+        const existing = all('drafts').find(draft => draft.meetingId === meeting.id && draft.dealId === deal.id);
+        if (existing) return existing;
+        const draft = { id: `draft_${randomUUID()}`, accountId: deal.accountId, dealId: deal.id, meetingId: meeting.id, runId: context.runId, recipientContactIds: [...args.recipientContactIds], subject: args.subject.trim(), body: args.body, evidence: [...args.evidence], status: 'needs_review', version: 1, createdAt: now(), approvedAt: null };
+        db.prepare('INSERT INTO drafts (id,deal_id,body) VALUES (?,?,?)').run(draft.id, deal.id, JSON.stringify(draft));
+        appendEvent(context.runId, { type: 'mutation', stage: 'tool', data: { tool: 'create_follow_up_draft', entityType: 'draft', entityId: draft.id, before: null, after: draft, evidence: args.evidence } });
+        return draft;
+      });
+    },
     search_accounts(args) { object(args, ['query']); string(args.query, 'query'); const query = args.query.trim().toLowerCase(); return { accounts: all('accounts').filter((account) => `${account.name} ${account.domain}`.toLowerCase().includes(query)) }; },
     get_account(args) { object(args, ['accountId']); const account = lookup('accounts', args.accountId, 'accountId'); return { ...account, contacts: all('contacts').filter((contact) => contact.accountId === account.id) }; },
     list_deals(args) { object(args, ['accountId']); lookup('accounts', args.accountId, 'accountId'); return { deals: all('deals').filter((deal) => deal.accountId === args.accountId) }; },
@@ -223,9 +263,11 @@ export function openStore({ path = resolve('.local/crm.sqlite') } = {}) {
         const meeting = scope(context.runId, before, args.evidence);
         for (const [field, value] of Object.entries(args.changes)) {
           if (field === 'stage' && !stages.includes(value)) fail('INVALID_ARGUMENT', 'stage is not a supported sales stage.');
-          if (field === 'amount') integer(value, 'amount', 0, 1000000000);
+          if (field === 'amount' || field === 'frontierSpendMonthly') integer(value, field, 0, 1000000000);
           if (field === 'closeDate') date(value, 'closeDate');
           if (field === 'nextStep') string(value, 'nextStep', 2000);
+          if (['pain', 'buyingProcess', 'stakeholderNotes'].includes(field)) string(value, field, 6000);
+          if (field === 'deployment' && !['cloud', 'on_prem', 'hybrid', 'unknown'].includes(value)) fail('INVALID_ARGUMENT', 'Invalid deployment requirement.');
           if (field === 'notes') string(value, 'notes', 6000, true);
           if (field === 'championContactId' && value !== null) {
             const contact = lookup('contacts', value, 'championContactId');
@@ -266,7 +308,52 @@ export function openStore({ path = resolve('.local/crm.sqlite') } = {}) {
     },
   };
   return {
-    overview() { return { ...snapshot(), meetings: all('meetings').sort((a, b) => (meetingOrder.get(a.id) ?? Infinity) - (meetingOrder.get(b.id) ?? Infinity)), fieldDefinitions: clone(fieldDefinitions) }; },
+    overview() { return { ...snapshot(), timeline: all('timeline'), comparisons: all('comparisons').map(c => ({ ...c, sides: c.sides.map(s => ({ ...s, run: { id: s.run.id, status: s.run.status, summary: s.run.summary, drafts: s.run.after?.drafts || [] } })) })), meetings: all('meetings').sort((a, b) => (meetingOrder.get(a.id) ?? Infinity) - (meetingOrder.get(b.id) ?? Infinity)), fieldDefinitions: clone(fieldDefinitions) }; },
+    reviewDraft(draftId, args) {
+      object(args, ['expectedVersion', 'recipientContactIds', 'subject', 'body', 'approve']);
+      integer(args.expectedVersion, 'expectedVersion', 1, Number.MAX_SAFE_INTEGER);
+      string(args.subject, 'subject', 200); string(args.body, 'body', 6000);
+      if (typeof args.approve !== 'boolean') fail('INVALID_ARGUMENT', 'approve must be a boolean.');
+      return transaction(() => {
+        if (db.prepare("SELECT id FROM runs WHERE status = 'running' LIMIT 1").get()) fail('RUN_ACTIVE', 'Review drafts after the run finishes.');
+        const before = lookup('drafts', draftId, 'draftId');
+        if (before.version !== args.expectedVersion) fail('VERSION_CONFLICT', 'The draft changed; reload before reviewing it.');
+        validateRecipients(lookup('deals', before.dealId, 'dealId'), args.recipientContactIds);
+        const after = { ...before, recipientContactIds: [...args.recipientContactIds], subject: args.subject.trim(), body: args.body, status: args.approve ? 'approved' : 'needs_review', version: before.version + 1, approvedAt: args.approve ? now() : null };
+        db.prepare('UPDATE drafts SET body = ? WHERE id = ?').run(JSON.stringify(after), draftId);
+        // Human review stays in the original run's journal without changing its completed snapshots.
+        db.prepare('INSERT INTO events (id,run_id,at,type,stage,data) VALUES (?,?,?,?,?,?)').run(`evt_${randomUUID()}`, before.runId, now(), 'draft_review', 'salesperson', JSON.stringify({ before, after, message: args.approve ? 'Salesperson approved the draft locally; no email sent.' : 'Draft edited; approval required again.' }));
+        return after;
+      });
+    },
+    reviewComparisonDraft(comparisonId, draftId, args) {
+      object(args, ['side', 'expectedVersion', 'recipientContactIds', 'subject', 'body', 'approve']);
+      integer(args.expectedVersion, 'expectedVersion', 1, Number.MAX_SAFE_INTEGER);
+      string(args.subject, 'subject', 200); string(args.body, 'body', 6000);
+      if (!['baseline', 'candidate'].includes(args.side) || typeof args.approve !== 'boolean') fail('INVALID_ARGUMENT', 'Invalid comparison review.');
+      return transaction(() => {
+        const comparison = lookup('comparisons', comparisonId, 'comparisonId');
+        if (comparison.status === 'running') fail('RUN_ACTIVE', 'Review after the comparison finishes.');
+        const side = comparison.sides.find(s => s.side === args.side);
+        const original = side?.run.after?.drafts.find(d => d.id === draftId);
+        if (!original) fail('NOT_FOUND', 'Comparison draft was not found.');
+        const before = side.reviewedDrafts?.find(d => d.id === draftId) || original;
+        if (before.version !== args.expectedVersion) fail('VERSION_CONFLICT', 'The draft changed; reload before reviewing it.');
+        const contacts = side.run.before.contacts;
+        if (!Array.isArray(args.recipientContactIds) || !args.recipientContactIds.length || args.recipientContactIds.length > 12 || new Set(args.recipientContactIds).size !== args.recipientContactIds.length || args.recipientContactIds.some(id => !contacts.some(c => c.id === id && c.accountId === before.accountId))) fail('SCOPE_MISMATCH', 'Recipients must belong to the synthetic account.');
+        const after = { ...before, subject: args.subject.trim(), body: args.body, recipientContactIds: [...args.recipientContactIds], status: args.approve ? 'approved' : 'needs_review', version: before.version + 1, approvedAt: args.approve ? now() : null };
+        side.reviewedDrafts = [...(side.reviewedDrafts || []).filter(d => d.id !== draftId), after];
+        side.run.events.push({ id: `evt_${randomUUID()}`, at: now(), type: 'draft_review', stage: 'salesperson', data: { before, after, message: args.approve ? 'Draft approved locally; no email sent.' : 'Draft edited; approval required again.' } });
+        db.prepare('UPDATE comparisons SET body = ? WHERE id = ?').run(JSON.stringify(comparison), comparisonId);
+        return after;
+      });
+    },
+    saveComparison(value) {
+      id(value.id, 'comparisonId');
+      db.prepare('INSERT OR REPLACE INTO comparisons (id,body) VALUES (?,?)').run(value.id, JSON.stringify(value));
+    },
+    listComparisons() { return all('comparisons'); },
+    getComparison(comparisonId) { return lookup('comparisons', comparisonId, 'comparisonId'); },
     getMeeting(meetingId) { return lookup('meetings', meetingId, 'meetingId'); },
     snapshot,
     createRun(args) {
@@ -326,7 +413,7 @@ export function openStore({ path = resolve('.local/crm.sqlite') } = {}) {
     reset() {
       return transaction(() => {
         if (db.prepare("SELECT id FROM runs WHERE status = 'running' LIMIT 1").get()) fail('RUN_ACTIVE', 'Cannot reset while a run is active.');
-        db.exec('DELETE FROM events; DELETE FROM runs; DELETE FROM tasks; DELETE FROM timeline; DELETE FROM meetings; DELETE FROM deals; DELETE FROM contacts; DELETE FROM accounts; DELETE FROM metadata;');
+        db.exec('DELETE FROM drafts; DELETE FROM comparisons; DELETE FROM events; DELETE FROM runs; DELETE FROM tasks; DELETE FROM timeline; DELETE FROM meetings; DELETE FROM deals; DELETE FROM contacts; DELETE FROM accounts; DELETE FROM metadata;');
         insertSeeds(); return snapshot();
       });
     },

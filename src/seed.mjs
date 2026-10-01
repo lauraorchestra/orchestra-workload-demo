@@ -1,3 +1,4 @@
+import { demoAccount, demoContacts, demoDeal, demoTimeline, demoMeetings, demoExpectations } from './demo-seed.mjs';
 // Every person, business, address, amount, and meeting below is wholly invented.
 export const seed = {
   accounts: [
@@ -82,9 +83,16 @@ At the end, Maya repeated the two-studio amount, November 20 target, and champio
   }],
 };
 
+seed.accounts.unshift(demoAccount);
+seed.contacts.push(...demoContacts);
+seed.deals.push(demoDeal);
+seed.timeline.push(...demoTimeline);
+seed.meetings.unshift(...demoMeetings);
+
 // Only deterministic offline tests/fixture transport may read this oracle.
 // It must never become model instructions or evidence.
 export const scenarioExpectations = Object.freeze({
+  scenarios: Object.freeze(demoExpectations),
   meetingId: 'mtg_maple_2026_10_14',
   accountId: 'acct_maple_works',
   dealId: 'deal_maple_rollout',

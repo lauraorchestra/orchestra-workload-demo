@@ -27,8 +27,8 @@ test('synthetic account discovery includes similar names and dated conflicting c
   assert.ok(timeline.some((item) => item.body.includes('$64,000')));
   assert.ok(timeline.some((item) => item.body.includes('$52,000')));
   assert.ok(store.getMeeting(expected.meetingId).note.includes('$48,000'));
-  assert.equal(store.overview().deals.length, 4);
-  assert.equal(toolDefinitions.length, 9);
+  assert.equal(store.overview().deals.length, 5);
+  assert.equal(toolDefinitions.length, 10);
 });
 
 test('accepted mutations persist with atomic audits and before/after run snapshots', (t) => {
@@ -155,7 +155,7 @@ test('mutations require an active run and cannot continue after completion', (t)
   assert.throws(() => store.executeTool('create_follow_up_task', taskArgs(), context), { code: 'RUN_FINISHED' });
   assert.throws(() => store.appendEvent(run.id, { type: 'late', stage: 'tool', data: {} }), { code: 'RUN_FINISHED' });
   assert.deepEqual(store.snapshot(), after);
-  assert.equal(store.getRun(run.id).after.deals.length, 4);
+  assert.equal(store.getRun(run.id).after.deals.length, 5);
 });
 
 test('reset restores exact seeds, removes runs/audits, and allows a fresh run', (t) => {

@@ -1,53 +1,64 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light">
-    <title>Orchestra · CRM Lab</title>
-    <link rel="stylesheet" href="/style.css">
-    <script src="/app.js" defer></script>
-  </head>
-  <body>
-    <div class="app-shell">
-      <aside class="sidebar" aria-label="CRM navigation">
-        <a class="brand" href="/" aria-label="Orchestra CRM Lab home"><span class="brand-mark" aria-hidden="true">o</span><span>orchestra<small>CRM LAB</small></span></a>
-        <div class="workspace-label"><span class="workspace-avatar">S</span><span>Synthetic workspace<small>Local development</small></span><span class="local-dot" title="Local application"></span></div>
-        <div class="nav-caption">WORKSPACE</div>
-        <div class="nav-current"><span aria-hidden="true">▦</span> Meeting follow-through <span class="nav-arrow" aria-hidden="true">↗</span></div>
-        <a class="debug-nav-link" href="/debug"><span aria-hidden="true">⌁</span> Run explorer <span aria-hidden="true">↗</span></a>
-        <div class="sidebar-section-heading"><h2>Accounts</h2><span id="account-count" class="sidebar-count">—</span></div>
-        <nav id="account-list" class="account-list" aria-label="Synthetic accounts"><p class="sidebar-placeholder">Loading accounts…</p></nav>
-        <div class="sidebar-bottom"><span class="lab-symbol" aria-hidden="true">✳</span><strong>A safe place to try things.</strong><p>Invented accounts and meetings. Changes stay in this local CRM.</p><button id="reset-button" class="reset-button" type="button">↺ Reset synthetic data</button></div>
-      </aside>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orchestra · Workload demos</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+  <aside class="rail">
+    <a class="wordmark" href="/">orchestra<span class="logo-dot"></span></a>
+    <div class="rail-workspace"><span class="avatar">o</span><div>Demo workspace<small>One app. Different workloads.</small></div></div>
+    <p class="rail-caption">EXPLORE BY WORKLOAD</p>
+    <button class="rail-link" data-usecase="extraction"><span>⌗</span> Extraction</button>
+    <button class="rail-link" data-usecase="classification"><span>≡</span> Classification</button>
+    <button class="rail-link" id="workspace-nav" data-usecase="workflows"><span>◫</span> Workflows</button>
+    <div class="rail-divider"></div>
 
-      <main class="main-content">
-        <header class="topbar"><div class="breadcrumb">Workspace <span aria-hidden="true">/</span> <strong>Meeting follow-through</strong></div><span class="synthetic-badge"><span aria-hidden="true">◈</span> SYNTHETIC DATA</span></header>
-        <div class="page-content">
-          <div id="page-error" class="error-banner" role="alert" hidden></div>
-          <section class="page-heading"><div><p class="eyebrow">FROM CONVERSATION TO ACTION</p><h1>Every meeting, followed through.</h1><p class="page-description">One agent reads the meeting, investigates the CRM, and decides what needs to change.</p></div><span class="local-label"><span></span> Local CRM</span></section>
-          <section class="account-overview" aria-labelledby="account-title"><div class="account-title-group"><div id="account-avatar" class="account-avatar" aria-hidden="true">…</div><div><p class="eyebrow">ACCOUNT WORKSPACE</p><h2 id="account-title">Loading your workspace…</h2><p id="account-description" class="muted">Your synthetic CRM records will appear here.</p></div></div><div id="account-stats" class="account-stats"></div></section>
-
-          <div class="workspace-grid">
-            <div class="source-column">
-              <section class="card deals-card" aria-labelledby="deals-title"><div class="card-heading"><h2 id="deals-title"><span class="section-icon" aria-hidden="true">◇</span> Deals</h2><span id="deals-count" class="count-badge">0</span></div><div id="deal-list" class="deal-list"><p class="empty-state">Loading deals…</p></div><div id="deal-detail" class="deal-detail" hidden></div></section>
-              <section class="card meeting-card" aria-labelledby="meeting-title"><div class="card-heading"><h2 id="meeting-title"><span class="section-icon" aria-hidden="true">▤</span> Meeting notes</h2><span class="subtle-tag">INPUT</span></div><div class="meeting-selector"><label for="meeting-select">Choose a synthetic meeting</label><select id="meeting-select" disabled><option>Loading meetings…</option></select></div><div id="meeting-meta" class="meeting-meta"></div><div class="note-paper" role="region" aria-label="Full synthetic meeting notes" tabindex="0"><span class="note-accent" aria-hidden="true"></span><p id="meeting-note" class="meeting-note">Loading meeting notes…</p></div><div class="source-footer"><span aria-hidden="true">◎</span> Choose a meeting to explore several actions, uncertain information, or no changes.</div></section>
-              <section class="card contacts-card" aria-labelledby="contacts-title"><div class="card-heading"><h2 id="contacts-title"><span class="section-icon" aria-hidden="true">♧</span> People</h2></div><div id="contact-list" class="contact-list"><p class="empty-state">Loading contacts…</p></div></section>
-            </div>
-
-            <div class="execution-column">
-              <section class="card run-card" aria-labelledby="run-title"><div class="card-heading"><h2 id="run-title"><span class="section-icon" aria-hidden="true">✳</span> Follow-through agent</h2><span id="run-status" class="status-pill status-idle">Ready</span></div><p class="card-description">One conversation, one goal. The agent chooses its tools and can update several records, create tasks, or explain why no change is appropriate.</p><details class="agent-instructions"><summary>Read the exact agent instructions</summary><p>These are the current instructions used for a new run. Each saved run retains its own original prompt in Run explorer.</p><h3>Goal</h3><pre id="agent-goal">Loading agent goal…</pre><h3>System prompt</h3><pre id="agent-system-prompt">Loading agent instructions…</pre></details><fieldset id="mode-fieldset" class="mode-selector"><legend class="sr-only">Execution mode</legend><label><input type="radio" name="mode" value="offline" checked><span><strong>Fixture / offline</strong><small>Deterministic transport exercise</small></span></label><label><input type="radio" name="mode" value="live"><span><strong>Real model</strong><small>Live inference through the configured endpoint</small></span></label></fieldset><p id="mode-explanation" class="mode-explanation">Offline mode exercises the tool workflow using fixture responses. It does not prove live model behavior.</p><div class="model-config"><div><span>MODEL</span><strong id="model-value">Loading configuration…</strong></div><div><span>LLM BUDGET</span><strong id="budget-value">Reading runner limits…</strong></div><p id="live-readiness">Checking live configuration…</p></div><button id="run-button" type="button" class="primary-button" disabled><span id="run-button-label">Run follow-through</span><span aria-hidden="true">↗</span></button><div id="run-error" class="inline-error" role="alert" hidden></div></section>
-
-              <section class="card activity-card" aria-labelledby="activity-title"><div class="card-heading"><h2 id="activity-title"><span class="section-icon" aria-hidden="true">⌁</span> Run activity</h2><span id="event-count" class="subtle-tag">TOOL TIMELINE</span></div><div id="run-metadata" class="run-metadata" hidden></div><div id="timeline" class="timeline"><div class="waiting-state"><div class="waiting-icon" aria-hidden="true">↗</div><h3>Ready when you are</h3><p>Start a run to watch the shared model conversation, tool calls, and local CRM changes appear here.</p></div></div></section>
-            </div>
-          </div>
-
-          <section id="outcome-card" class="card outcome-card" aria-labelledby="outcome-title" hidden><div class="card-heading"><h2 id="outcome-title"><span class="section-icon" aria-hidden="true">✓</span> What changed</h2><span id="outcome-mode" class="subtle-tag"></span></div><p id="run-summary" class="run-summary" hidden></p><p id="outcome-explanation" class="outcome-explanation"></p><div id="deal-changes"></div><div id="created-tasks"></div><p id="no-changes" class="empty-state" hidden>No deal field changes or new tasks were recorded in this run.</p></section>
-
-          <section class="run-history" aria-labelledby="history-title"><div class="history-heading"><h2 id="history-title">Recent runs</h2><span>Local execution journal</span></div><div id="history-list"><p class="history-empty">No runs yet. Your next run starts the story.</p></div></section>
-          <footer class="page-footer"><span>Orchestra CRM Lab</span><p>All records are invented. No email is sent and no external CRM is modified.</p><span id="connection-status" aria-live="polite">Connecting…</span></footer>
+    <div class="rail-bottom"><div class="environment"><span></span> Local synthetic workspace</div><a href="/lab" class="rail-link subtle"><span>⚙</span> Technical lab</a><div class="user-chip"><span class="avatar small-avatar">QE</span><div>Quinn Ellis<small>Account executive</small></div></div></div>
+  </aside>
+  <main>
+    <header class="topbar"><div class="breadcrumbs">Demo lab <span>/</span> <strong id="page-name">Customer follow-through</strong></div><div class="top-actions"><span id="mode-badge" class="demo-badge">Synthetic demo replay</span><button id="settings-button" class="icon-button" aria-label="Configure models">⚙</button></div></header>
+    <div class="page-body">
+      <div id="page-error" class="error" role="alert" hidden></div>
+      <section class="heading"><div><p class="eyebrow">FROM CUSTOMER CONTEXT TO COMPLETED WORK</p><h1 id="page-title">Every detail. The right next move.</h1><p id="page-subtitle">A follow-up that remembers the conversation—and the conversations before it.</p></div><div class="heading-actions"><button id="run-button" class="primary"><span>↻</span> <span id="run-label">Run demo replay</span></button></div></section>
+      <div id="workload-model-summary" class="workload-model-summary"></div>
+      <div class="run-progress" id="run-progress" hidden><span class="pulse"></span><span id="progress-text">Reading the same customer history for both routes…</span></div>
+      <section id="structured-view" hidden>
+        <div class="task-workspace">
+          <section class="context-panel structured-input"><div class="panel-title"><span>FROZEN INPUT</span><span class="pill">Synthetic</span></div><h3 id="task-title"></h3><p id="task-description" class="meeting-description"></p><pre id="task-input" class="document-input"></pre><span id="task-shape" hidden></span><div id="task-concerns" class="task-concerns"></div></section>
+          <section class="work-panel"><div class="work-panel-head"><div><span class="eyebrow">YOUR APPLICATION OUTPUT</span><h2 id="task-output-title">Structured records. Grounded values.</h2></div><span id="task-result-state" class="pill">Ready to run</span></div><div class="route-selector" aria-label="Choose task result route"><button class="route active" data-route="baseline"><span class="route-mark">F</span><div>Frontier route<small>Same frozen input</small></div></button><button class="route" data-route="candidate"><span class="route-mark optimized">o</span><div>Optimized route<small>Alternative configuration</small></div></button></div><div id="task-output" class="output-content"></div><div class="result-footer"><span id="task-checks">Schema · coverage · correctness</span></div></section>
         </div>
-      </main>
+      </section>
+      <section id="workspace-view">
+        <div class="task-workspace">
+          <section class="context-panel structured-input workflow-input">
+            <div class="panel-title"><span>FROZEN INPUT</span><span class="pill">Synthetic</span></div>
+            <h3>Coordinate a multi-step follow-through</h3>
+            <p class="meeting-description">Read a new request alongside earlier context, use the right tools, and leave the application in the correct state.</p>
+            <div class="workflow-scenario"><label for="workflow-scenario">Scenario</label><select id="workflow-scenario"><option value="mtg_cedar_explicit">Confirmed decisions</option><option value="mtg_cedar_ambiguous">Unconfirmed details</option></select></div>
+            <div class="document-input workflow-brief"><span class="brief-label">TASK BRIEF · SALES FOLLOW-THROUGH</span><h3 id="meeting-title">Architecture & pilot plan</h3><p id="meeting-preview"></p><div id="meeting-highlights" class="meeting-highlights"></div></div>
+            <details class="full-notes"><summary>Read the source meeting</summary><p id="meeting-note"></p></details>
+            <div class="context-reference"><span>◷</span><div><strong id="context-count">63 dated sources</strong><small>History, stakeholders and prior decisions.</small><button id="history-button" class="text-button">Explore the input context ↗</button></div></div>
+            <div class="task-concerns"><div class="highlight">✓ Resolve the latest confirmed facts</div><div class="highlight">✓ Respect tool permissions and existing records</div><div class="highlight">✓ Leave the follow-up for human approval</div></div>
+          </section>
+          <section class="work-panel">
+            <div class="work-panel-head"><div><span class="eyebrow">YOUR APPLICATION OUTPUT</span><h2>Coordinated actions. Verified outcomes.</h2></div><span id="result-state" class="pill">Ready to run</span></div>
+            <div class="route-selector" aria-label="Choose result route"><button class="route active" data-route="baseline"><span class="route-mark">F</span><div>Frontier route<small id="baseline-route-detail">Incumbent configuration</small></div></button><button class="route" data-route="candidate"><span class="route-mark optimized">o</span><div>Optimized route<small id="candidate-route-detail">Alternative configuration</small></div><span class="route-check">✓</span></button></div>
+<span id="changes-count" hidden></span><span id="tasks-count" hidden></span>
+            <div id="output-content" class="output-content"><div class="empty-result"><span>↗</span><h3>One conversation. A complete follow-through.</h3><p>Run the demo to create a follow-up, reconcile the deal, and capture what happens next.</p></div></div>
+            <div class="result-footer"><span id="output-checks">Same task · same starting history</span></div>
+          </section>
+        </div>
+      </section>
+      <section id="studio-view" class="inline-comparison">
+        <div class="studio-header"><div><p class="eyebrow">SAME INPUT. SAME REQUIREMENTS.</p><h2>Model comparison</h2></div><div class="comparison-actions"><span id="comparison-status" class="pill">Awaiting comparison</span><button id="evidence-button" class="text-button">Inspect details ↗</button></div></div>
+        <div id="route-scorecards" class="route-scorecards"></div>
+        <div class="inline-verdict"><div><strong id="inline-savings">Run both routes to compare.</strong><small id="inline-savings-note">No savings claim before the required checks pass.</small></div><span>Offline economics are illustrative. Live latency requires real model runs.</span></div>
+      </section>
+      <footer class="page-footer"><span>Synthetic records · local tools · no external CRM writes</span><span id="evidence-label">Demo replay, not a live model benchmark</span></footer>
     </div>
-  </body>
-</html>
+  </main>
+  <dialog id="inspector" class="inspector"><div class="dialog-heading"><div><p class="eyebrow">THE EVIDENCE BEHIND THE EXPERIENCE</p><h2 id="inspector-title">Inspect the result</h2></div><button class="icon-button close-dialog" aria-label="Close evidence">×</button></div><div id="comparison-deep" hidden>        <div class="studio-grid"><section class="quality-panel"><div class="section-heading"><h3>The outcome is the test.</h3></div><p class="muted">The same requirements apply to both routes.</p><div id="quality-matrix"></div><div class="quality-note">Checks are specific to each workload. Passing one synthetic case does not establish production reliability; repeated representative evaluations and human review remain necessary.</div></section>
+        <section class="economics-panel"><span class="eyebrow" id="economics-kind">ILLUSTRATIVE ECONOMICS</span><h3>Small task savings. Real scale.</h3><div class="savings-number"><strong id="monthly-savings">$1,800</strong><span id="savings-caption">potential monthly savings</span></div><div class="economics-bars"><div><span>Frontier route</span><strong id="baseline-monthly">$2,400</strong><div class="cost-track"><i id="baseline-bar"></i></div></div><div><span>Optimized route</span><strong id="candidate-monthly">$600</strong><div class="cost-track candidate-track"><i id="candidate-bar"></i></div></div></div><label class="volume-label" for="task-volume">Accepted tasks / month<strong id="volume-label">100,000</strong></label><input type="range" id="task-volume" min="1000" max="500000" step="1000" value="100000"><details class="assumptions"><summary id="assumptions-summary">Planning assumptions · not measured savings</summary><div class="assumption-fields"><label>Frontier cost / accepted task ($)<input id="sample-baseline" type="number" min="0" step="0.001" value="0.024"></label><label>Optimized cost / accepted task ($)<input id="sample-candidate" type="number" min="0" step="0.001" value="0.006"></label></div><p id="economics-note">Illustrative values for explaining the economics. Fixture checks do not establish real model parity. Live pricing excludes infrastructure and optimization overhead.</p></details></section></div>
+        <div class="improvement-card"><span class="improvement-symbol">↻</span><div><h3>Understand the gap. Improve the next attempt.</h3><p>Inspect the failed action, refine the candidate instructions, and rerun the same task.</p></div><button id="failure-button" class="text-button">Show a failing attempt</button><button id="refine-button" class="secondary">Refine & rerun ↗</button></div>
+</div><div id="inspector-content"></div></dialog>
+  <dialog id="settings" class="settings"><div class="dialog-heading"><div><p class="eyebrow">EXPERIMENT CONFIGURATION</p><h2 id="model-config-title">Extraction model configuration</h2></div><button class="icon-button close-dialog" aria-label="Close settings">×</button></div><p><span id="model-config-description">Each route receives the same input.</span> Live inference uses the server’s authorized provider.</p><label>Execution<select id="execution-mode"><option value="offline">Synthetic demo replay</option><option value="live">Live model comparison</option></select></label><div class="setting-grid"><label>Frontier model<input id="baseline-model"></label><label>Alternative model<input id="candidate-model" placeholder="Approved model name"></label></div><p id="provider-status" class="settings-note"></p><details><summary>Live cost estimates</summary><p>Optional USD per million tokens from your provider. User-supplied estimates, not verified billing. Leave blank to show cost as unavailable.</p><div class="setting-grid"><label>Frontier input<input id="baseline-input" type="number" min="0" step="any"></label><label>Frontier output<input id="baseline-output" type="number" min="0" step="any"></label><label>Alternative input<input id="candidate-input" type="number" min="0" step="any"></label><label>Alternative output<input id="candidate-output" type="number" min="0" step="any"></label></div></details><div class="dialog-actions"><button class="secondary close-dialog">Done</button></div></dialog>
+  <dialog id="refinement" class="settings"><div class="dialog-heading"><div><p class="eyebrow">A REVIEWABLE EXPERIMENT</p><h2>Improve the candidate.</h2></div><button class="icon-button close-dialog" aria-label="Close refinement">×</button></div><p>Add guidance to the candidate’s next attempt. The baseline stays unchanged. Record permissions, tool budgets and salesperson approval still apply.</p><label>Candidate guidance<textarea id="candidate-guidance" maxlength="3000" rows="6" placeholder="Clarify how the assistant should use dated evidence or check an outcome…"></textarea></label><button id="checklist-button" class="text-button">Add a context-reading checklist</button><p class="settings-note">This is an operator-authored instruction experiment, not automated optimization or model training. Offline fixture replies do not change in response to guidance. Use “Replay complete attempt” to view a separate curated passing example.</p><div class="dialog-actions"><button id="passing-replay-button" class="secondary">Replay complete attempt</button><button id="refine-run-button" class="primary">Rerun comparison</button></div></dialog>
+</body></html>

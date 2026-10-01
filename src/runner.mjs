@@ -10,7 +10,8 @@ function parseArguments(content) {
   return parsed;
 }
 
-export async function runMeeting({ store, meetingId, mode, config, onRunCreated, offlineFetch }) {
+export async function runMeeting({ store, meetingId, mode, config, onRunCreated, offlineFetch, guidance = '', offlineVariant = 'complete' }) {
+  if (typeof guidance !== 'string' || guidance.length > 3000) throw new Error('Guidance must be at most 3000 characters.');
   if (offlineFetch && mode !== 'offline') throw new Error('Fixture transport is only available in offline mode.');
   const meeting = store.getMeeting(meetingId);
   if (!meeting) throw new Error('Meeting not found.');
@@ -42,9 +43,11 @@ export async function runMeeting({ store, meetingId, mode, config, onRunCreated,
   function confirmPersistedWrites() {
     const deals = new Map();
     const tasks = [];
+    const drafts = [];
     for (const call of successful) {
       if (call.name === 'update_deal') deals.set(call.result.id, call.result);
       if (call.name === 'create_follow_up_task') tasks.push(call.result);
+      if (call.name === 'create_follow_up_draft') drafts.push(call.result);
     }
     const persisted = store.snapshot();
     for (const [id, expected] of deals) {
@@ -54,6 +57,10 @@ export async function runMeeting({ store, meetingId, mode, config, onRunCreated,
     for (const expected of tasks) {
       const actual = persisted.tasks.find(task => task.id === expected.id);
       if (expected.accountId !== meeting.accountId || !isDeepStrictEqual(actual, expected)) throw new Error('A returned follow-up task does not match the persisted CRM state.');
+    }
+    for (const expected of drafts) {
+      const actual = persisted.drafts.find(draft => draft.id === expected.id);
+      if (expected.accountId !== meeting.accountId || !isDeepStrictEqual(actual, expected)) throw new Error('Returned draft does not match saved CRM state.');
     }
     event({ type: 'workflow', stage: crmAgent.stage, data: {
       message: 'Agent conversation completed. Returned writes match the saved CRM; business correctness has not been independently graded.',
@@ -65,13 +72,13 @@ export async function runMeeting({ store, meetingId, mode, config, onRunCreated,
     event({ type: 'run_context', stage: 'run', data: {
       captureVersion: 2, meeting: JSON.parse(JSON.stringify(meeting)), provider: config.provider,
       model: mode === 'offline' ? 'fixture-model' : config.model, mode,
-      agent: { name: crmAgent.name, stage: crmAgent.stage, goal: crmAgent.goal },
+      agent: { name: crmAgent.name, stage: crmAgent.stage, goal: crmAgent.goal }, operatorGuidance: guidance, ...(mode === 'offline' ? { replayVariant: offlineVariant } : {}),
       limits: { maxModelCalls: config.maxModelCalls, maxToolCalls: config.maxToolCalls, maxOutputTokens: config.maxOutputTokens },
     } });
-    const complete = createModel({ config, mode, fetch: mode === 'offline' ? offlineFetch || fixtureFetchFor(store, meetingId) : undefined, onEvent: event });
+    const complete = createModel({ config, mode, fetch: mode === 'offline' ? offlineFetch || fixtureFetchFor(store, meetingId, { variant: offlineVariant }) : undefined, onEvent: event });
     const messages = [
       { role: 'system', content: crmAgent.systemPrompt },
-      { role: 'user', content: JSON.stringify({ goal: crmAgent.goal, meeting }) },
+      { role: 'user', content: JSON.stringify({ goal: crmAgent.goal, meeting, ...(guidance ? { operatorGuidance: guidance } : {}) }) },
     ];
     for (let turn = 0; turn < config.maxModelCalls; turn++) {
       const message = await complete(crmAgent.stage, messages, { tools: toolDefinitions });

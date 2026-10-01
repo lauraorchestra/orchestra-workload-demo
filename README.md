@@ -1,4 +1,25 @@
-# CRM meeting follow-through lab
+# Orchestra workload demo
+
+A synthetic, customer-facing app for demonstrating **Extraction**, **Classification**, and **Workflows**. Each workload shows the frozen input, selected route result, and model comparison on one page. Expand workflow drafts and changes inline, or open **Inspect details** for exact model I/O, tool calls, outcome checks and planning assumptions.
+
+![Workload demo preview](docs/demo-preview.png)
+
+### Run the demo
+
+Requires Node.js 24 or newer.
+
+```sh
+npm ci
+npm start
+```
+
+Open **http://127.0.0.1:4317/** on your own computer. A GitHub repository link shares the code and this preview; it is not a hosted app.
+
+The default is a scripted SDK replay with synthetic data. Offline costs are illustrative and latency is not measured. Live models require explicit provider configuration. Model settings and planning inputs are saved independently per workload in this browser. No email or external CRM writes occur.
+
+Run `npm test` for the regression suite. The original technical CRM interface remains at `/lab`, and exact captured runs can be inspected at `/debug`.
+
+## CRM lab foundation
 
 A local CRM application with wholly invented accounts, contacts, deals, meeting
 notes, timelines and follow-up tasks. One agent receives a goal, the meeting,
@@ -247,3 +268,132 @@ to make logs appear. Confirm the same trace in the dashboard after checking its
 organization. A successful HTTP response alone is insufficient: incorrect
 inference names can land in the organization's default workload. Keep exact run
 IDs, logs, screenshots, and gateway verification receipts in `.understudy/`.
+
+## Sales demo built from the requirements interview
+
+Start with **Cedar AI** for a ten-minute walkthrough. Its 63 synthetic history
+sources include customer pain, confirmed frontier API spending, deployment
+requirements and the buying team. The main page exposes searchable source
+history, the current buying process, tasks, and prospect follow-up drafts.
+
+The deployment-decision meeting confirms on-premises deployment and $110,000
+monthly model spend. That operating spend is separate from the $96,000 sales
+opportunity. The ambiguous meeting makes no confirmed deal or deadline changes
+and asks for clarification. Both have offline scripts to demonstrate the
+application mechanics. These scripts are not model reasoning or performance
+proof. The original Maple fixture remains the CLI default; use the meeting
+selector for Cedar or pass `--meeting mtg_cedar_explicit` to the CLI.
+
+`create_follow_up_draft` saves existing account recipients, subject, body, and
+source references. The model cannot approve a draft. A salesperson edits and
+approves it through the local UI. Saving changes clears approval; optimistic
+versions reject stale review submissions. Approval events are retained in the
+original run journal while its original final snapshot remains unchanged. No
+sending endpoint exists.
+
+**Same task. Different model.** runs two sequential, independently seeded
+in-memory databases and persists both complete journals privately in the main
+SQLite database. Every comparison uses the shipped seed, not the current edited
+CRM. It compares the complete initial records, history, prompt, and field
+configuration and records a starting-state hash. The working CRM and its drafts
+are untouched. Completed results link to the existing run explorer. A failed or
+interrupted pair retains completed sides and never automatically retries live
+inference. Reset clears comparison history along with ordinary run history.
+
+Choose the same Cedar scenario and execution mode, then enter the baseline and
+candidate model names available through the configured provider. The gateway
+remains organization-verified; direct OpenAI still uses only its authorized
+process key. Comparisons use two per-run budgets at most (32 model requests by
+default), with retries disabled. No endpoint or credential is accepted from the
+browser. Actual availability and protocol compatibility must be verified before
+real model comparisons; no open-weight model is preconfigured or downloaded.
+
+Offline comparisons display fixture labels and no token or cost measurements.
+Live comparisons display measured elapsed time, request/tool counts, reported
+usage and served models. Optional user-supplied input/output rates produce an
+**estimate**, not verified billing; rates are per million tokens. Estimates are
+withheld when usage is missing, a request has no response, or the served model
+differs from the requested model. Cache discounts and infrastructure costs are
+not included. No savings claim should be made from fixture runs or incomplete
+pricing evidence.
+
+Scenario checks inspect persisted fields, preservation of other deals and
+existing tasks, new task count/deal/deadline, draft recipients and pending
+approval. They do not evaluate every aspect of prose, task meaning, factual
+completeness or buying-step order. Inspect both generated drafts and tool
+journals. A single run is not a reliability benchmark; expand the synthetic
+cases and run repeated live evaluations before claiming parity.
+
+The long history is generated deterministically in `src/demo-seed.mjs`. The
+current 60 background conversations repeat five themes, with three key dated
+sources. This makes an immediate long-context demonstration but is not yet a
+representative production corpus. Expand it with varied conversations and
+reviewed expectations for a broader evaluation.
+
+## Customer-facing demo workspace
+
+The default page is now a focused sales-assistant application. A presenter can
+move between the customer conversation and the resulting prospect follow-up,
+deal changes and next-step tasks. Frontier and optimized route tabs display
+actual captured outputs from a controlled comparison. **Model studio** puts
+both route results, outcome checks and economics in one place. The previous
+CRM interface remains at `/lab`; the run explorer remains at `/debug`.
+
+The design draws on the sales deck's failed-attempt and improvement examples,
+and on the technical concerns from the September 30 Adobe discussion: compare
+against a fixed workflow, preserve evaluation tasks as models change, inspect
+tool actions and keep data boundaries visible. No Adobe records are included
+in the app, fixtures, or model prompts.
+
+In demo replay mode, per-task cost values and monthly savings are explicitly
+**illustrative planning inputs**, independently adjustable in the studio. They
+are not measured model performance. The route outputs and saved-state checks
+come from actual fixture transport runs. Switching routes does not turn those
+fixtures into live inference evidence. Live mode replaces sample costs with
+user-priced observed usage only when each route passes the saved-state checks.
+Monthly projections remain illustrative extrapolations from one attempt and
+exclude human acceptance, repeated-run reliability, and operating/optimization
+overhead. No automatic eligibility or production routing decision is made.
+
+The studio can add optional, bounded operator guidance to the candidate run.
+That instruction variant is recorded separately; the baseline prompt stays
+unchanged. The app compares the initial data independently of that deliberate
+prompt difference. This is a human-authored experiment, not a claim of automated
+prompt optimization or training. Offline fixtures do not respond to guidance.
+
+Follow-up drafts from comparison runs can now be edited and approved locally.
+Review copies and review events are saved in private comparison history; the
+original final snapshots and outcome checks remain intact. Saving edits clears
+approval, recipients remain account-scoped, and stale versions are rejected.
+There is still no email-send or external CRM endpoint.
+
+In model studio, **Show a missed-context replay** executes a curated incorrect
+candidate fixture: it keeps stale spend and deployment and chooses the wrong
+follow-up recipients. Its tool loop can complete while the outcome checks fail.
+The app withholds projected savings when either route fails those checks.
+**Replay complete attempt** selects a separate curated passing fixture. That
+transition is presentation material, not evidence of an optimization algorithm
+or of an offline model reacting to a prompt edit. Failure fixtures are rejected
+in live mode. Real instruction experiments remain available in live mode.
+
+## Workload navigation
+
+The customer demo opens with **Extraction**, **Classification**, and **Workflows**, rather than industry-specific navigation. The workflow example remains sales follow-through; confirmed and ambiguous meetings are selected inside that example.
+
+- Extraction: a frozen synthetic planning document becomes event records with typed dates/times and source evidence. Checks distinguish old dates, explicit corrections, missing times, record coverage, and the bare JSON interface.
+- Classification: three synthetic incoming requests map to the fixed five-label inbox taxonomy, adapted from the Understudy Ladder email task. Label correctness and output schema are checked independently.
+- Workflows: the existing versioned SQLite tool loop, customer history, updates, next steps, and salesperson draft approval.
+
+All three preserve independent starting inputs, captured SDK requests/responses, workload-specific deterministic checks and clearly illustrative economics in offline mode. Curated failure attempts demonstrate missed corrections/guessed fields (extraction), wrong routing and fenced JSON (classification), or stale context/recipients (workflows). They are scripted fixtures, not measured model failures or optimization results. Gold values are used only by fixtures and evaluators and are excluded from live prompts. Each new task currently has one input case; it is not a representative benchmark suite.
+
+Direct OpenAI live comparison uses the existing authorized configuration. Gateway comparisons for extraction and classification additionally need explicit `eventExtraction` and `requestClassification` workload mappings; the UI disables live selection for these tasks until both are configured. There are no extra tools in these single-shot tasks and no external writes.
+
+Design references inspected at Understudy agent tools commit `fd4ae63cff4d6ff8013ef36f3322f0fea7889254`: `skills/ladder` (data-defined comparison tasks, viewer and strict final-state checks), and `skills/design-simulated-environment/examples/event-categorizer` (separate semantic and interface gates). The new extraction case is authored for this app, not a copy of Luis’s Adobe demonstration. Real Adobe content is not imported into application data.
+
+### Consistent workload presentation
+
+All workload pages use the same frozen-input/application-output panels and a workload-specific model setup strip. Workflow output defaults to an execution summary derived from recorded tool results and saved snapshots, with tabs for draft, field changes and tasks. The comparison button lives within each workload instead of a global Model Studio sidebar entry. Model names, mode, supplied token rates, illustrative task costs and planning volume are independently stored per workload in this browser's local storage; no credentials are stored. Captured comparisons retain their original model configuration regardless of later selection changes. Offline replay labels remain explicit.
+
+### One page per workload
+
+Input, selected route output, and a compact two-route comparison are always on the same page. The comparison shows scoped outcome checks, cost estimates (clearly illustrative in replay mode), and latency only for live attempts. Savings projections remain gated on both routes passing. Workflow field changes, tasks and editable drafts expand inside the execution summary rather than separate output tabs. The Inspect details drawer holds the full check matrix, economics assumptions, exact structured output and captured SDK/tool evidence. Model configuration remains behind the gear, with per-workload saved settings.
